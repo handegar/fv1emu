@@ -39,6 +39,8 @@ func main() {
 	var opCodes = dsp.ParseBuffer(buf)
 	_ = opCodes
 
-	utils.PrintCodeListing(opCodes)
+	if settings.PrintCode {
+		utils.PrintCodeListing(opCodes)
+	}
 
 }

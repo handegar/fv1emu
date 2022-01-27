@@ -4,7 +4,15 @@ var Version = "0.1"
 
 var InputWav = "input.wav"
 var OutputWav = "output.wav"
-var ProgramNo = 0
-var PrintStats = false
-var PrintCode = false
 var HexFilename = ""
+
+var ProgramNo = 0
+
+// Print some collected stats (num opcodes etc.)
+var PrintStats = false
+
+// Do a code printout
+var PrintCode = true
+
+// Max number of operations allowed in a FV-1 program
+var MaxNumberOfOps = 128

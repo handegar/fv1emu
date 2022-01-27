@@ -13,13 +13,6 @@ func DecodeOp(opcode uint32) Op {
 		op.Args = append(op.Args, a)
 	}
 
-	// Special cases
-	if op.Name == "RDFX" && (opcode>>(32-6)) == 0 {
-		op.Name = "LDAX"
-		// Ignore first arg
-		op.Args[2].Type = Blank
-	}
-
 	//fmt.Printf("Name=%s (0b%32b)\n", op.Name, opcode)
 	bitPos := 5 // Skip the opcode field
 	for i, arg := range op.Args {
@@ -32,6 +25,13 @@ func DecodeOp(opcode uint32) Op {
 			op.Args[i].RawValue = paramBits
 		}
 		bitPos += arg.Len
+	}
+
+	// Special cases
+	if op.Name == "RDFX" && op.Args[1].RawValue == 0 && op.Args[2].RawValue == 0 {
+		op.Name = "LDAX"
+		// Ignore first arg
+		op.Args[2].Type = Blank
 	}
 
 	//fmt.Printf(" -> %d args\n", len(op.Args))

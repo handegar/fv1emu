@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/handegar/fv1emu/dsp"
+	"github.com/handegar/fv1emu/settings"
 )
 
 func OpCodeToString(opcode dsp.Op) string {
@@ -30,11 +31,13 @@ func OpCodeToString(opcode dsp.Op) string {
 		ret += op_RDA_ToString(opcode)
 	case "RDAX":
 		ret += op_RDAX_ToString(opcode)
+	case "RDFX":
+		ret += op_RDFX_ToString(opcode)
 	default:
 		ret += fmt.Sprintf("<%s 0b%b>", opcode.Name)
 	}
 
-	diff := 20 - len(ret)
+	diff := 25 - len(ret)
 	if diff > 1 {
 		for i := 0; i < diff; i++ {
 			ret += " "
@@ -63,15 +66,21 @@ func op_LDAX_ToString(op dsp.Op) string {
 }
 
 func op_WRAX_ToString(op dsp.Op) string {
-	return fmt.Sprintf("WRAX\t %s, %.2f",
+	return fmt.Sprintf("WRAX\t %s, %f",
 		dsp.Symbols[int(op.Args[0].RawValue)],
 		Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_RDAX_ToString(op dsp.Op) string {
-	return fmt.Sprintf("RDAX\t %s, %.2f",
+	return fmt.Sprintf("RDAX\t %s, %f",
 		dsp.Symbols[int(op.Args[0].RawValue)],
-		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
+		Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+}
+
+func op_RDFX_ToString(op dsp.Op) string {
+	return fmt.Sprintf("RDFX\t %s, %f",
+		dsp.Symbols[int(op.Args[0].RawValue)],
+		Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_MULX_ToString(op dsp.Op) string {
@@ -80,51 +89,57 @@ func op_MULX_ToString(op dsp.Op) string {
 }
 
 func op_WRA_ToString(op dsp.Op) string {
-	return fmt.Sprintf("WRA\t %d, %.2f",
+	return fmt.Sprintf("WRA\t %d, %f",
 		op.Args[0].RawValue,
 		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
 }
 
 func op_WRAP_ToString(op dsp.Op) string {
-	return fmt.Sprintf("WRAP\t %d, %.2f",
+	return fmt.Sprintf("WRAP\t %d, %f",
 		op.Args[0].RawValue,
 		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
 }
 
 func op_RDA_ToString(op dsp.Op) string {
-	return fmt.Sprintf("RDA\t %d, %.2f",
+	return fmt.Sprintf("RDA\t %d, %f",
 		op.Args[0].RawValue,
 		Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_SOF_ToString(op dsp.Op) string {
-	return fmt.Sprintf("SOF\t %.2f, %.2f",
+	return fmt.Sprintf("SOF\t %f, %f",
 		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
 		Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
 func op_EXP_ToString(op dsp.Op) string {
-	return fmt.Sprintf("EXP\t %.2f, %.2f",
-		Real2ToFloat(op.Args[0].Len, op.Args[0].RawValue),
-		Real1ToFloat(op.Args[1].Len, op.Args[1].RawValue))
+	return fmt.Sprintf("EXP\t %f, %f",
+		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
+		Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
 // S1.9 or S1.14: -2...1.9999
 func Real2ToFloat(bits int, raw uint32) float32 {
-	max := dsp.ArgBitMasks[bits]
-	if max == 0 {
-		panic(0)
+	isSigned := raw >> (bits - 1)
+	num := (raw & dsp.ArgBitMasks[bits-1]) << 1
+	ret := (float32(num) / float32(dsp.ArgBitMasks[bits-1]))
+	if isSigned == 1 {
+		return -ret
+	} else {
+		return ret
 	}
-	return 4.0 * (float32(raw) / float32(max))
 }
 
 // S.10: -1...0.999999
 func Real1ToFloat(bits int, raw uint32) float32 {
-	max := dsp.ArgBitMasks[bits]
-	if max == 0 {
-		panic(0)
+	isSigned := raw >> (bits - 1)
+	num := (raw & dsp.ArgBitMasks[bits-1])
+	ret := (float32(num) / float32(dsp.ArgBitMasks[bits-1]))
+	if isSigned == 1 {
+		return -ret
+	} else {
+		return ret
 	}
-	return 2.0 * (float32(raw) / float32(max))
 }
 
 func PrintCodeListing(opCodes []dsp.Op) {
@@ -144,6 +159,12 @@ func PrintCodeListing(opCodes []dsp.Op) {
 		}
 
 		fmt.Print(op)
+
+		if pos > settings.MaxNumberOfOps {
+			fmt.Printf(";; Max number of instructions reached (%d)\n",
+				settings.MaxNumberOfOps)
+			break
+		}
 	}
 	fmt.Println()
 }

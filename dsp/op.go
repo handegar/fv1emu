@@ -4,9 +4,12 @@ package dsp
 var ArgBitMasks = map[int]uint32{
 	32: 0b11111111111111111111111111111111,
 	24: 0b111111111111111111111111,
+	17: 0b11111111111111111,
 	16: 0b1111111111111111,
 	15: 0b111111111111111,
+	12: 0b111111111111,
 	11: 0b11111111111,
+	10: 0b1111111111,
 	9:  0b111111111,
 	6:  0b111111,
 	5:  0b11111,
@@ -41,7 +44,7 @@ var Ops = map[uint32]Op{
 		[]OpArg{{16, Real, 0}, {11, Real, 0}}, // C * LOG(|ACC|) + D
 		0},
 	0x0C: {"EXP",
-		[]OpArg{{16, Real, 0}, {11, Real, 0}}, // C * EXP(ACC) + D
+		[]OpArg{{11, Real, 0}, {16, Real, 0}}, // C * EXP(ACC) + D
 		0},
 	0x0D: {"SOF",
 		[]OpArg{{11, Real, 0}, {16, Real, 0}}, // C * ACC + D
@@ -73,7 +76,7 @@ var Ops = map[uint32]Op{
 		0},
 	// Register instructions
 	0x04: {"RDAX",
-		[]OpArg{{6, UInt, 0}, {16, Real, 0}}, // C * REG[ADDR] + ACC
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real, 0}}, // C * REG[ADDR] + ACC
 		0},
 	0x06: {"WRAX",
 		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real, 0}}, // ACC -> REG[ADDR], C * ACC
