@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/handegar/fv1emu/dsp"
 	"github.com/handegar/fv1emu/settings"
@@ -33,8 +34,20 @@ func OpCodeToString(opcode dsp.Op) string {
 		ret += op_RDAX_ToString(opcode)
 	case "RDFX":
 		ret += op_RDFX_ToString(opcode)
+	case "LOG":
+		ret += op_LOG_ToString(opcode)
+	case "WLDS":
+		ret += op_WLDS_ToString(opcode)
+	case "WLDR":
+		ret += op_WLDR_ToString(opcode)
+	case "CHO RDA":
+		ret += op_CHO(opcode)
+	case "CHO SOF":
+		ret += op_CHO(opcode)
+	case "CHO RDAL":
+		ret += op_CHO(opcode)
 	default:
-		ret += fmt.Sprintf("<%s 0b%b>", opcode.Name)
+		ret += fmt.Sprintf("<%s 0b%b>", opcode.Name, opcode.RawValue)
 	}
 
 	diff := 25 - len(ret)
@@ -55,8 +68,16 @@ func OpCodeToString(opcode dsp.Op) string {
 }
 
 func op_SKP_ToString(op dsp.Op) string {
+	var cmds []string
+	flags := int(op.Args[2].RawValue)
+	for i := 0; i < len(dsp.SkpFlagSymbols); i++ {
+		if (flags & (1 << i)) != 0 {
+			cmds = append(cmds, dsp.SkpFlagSymbols[flags&(1<<i)])
+		}
+	}
+
 	return fmt.Sprintf("SKP\t %s, addr_%d",
-		dsp.Symbols[int(op.Args[2].RawValue)],
+		strings.Join(cmds, "|"),
 		op.Args[1].RawValue+1)
 }
 
@@ -103,7 +124,7 @@ func op_WRAP_ToString(op dsp.Op) string {
 func op_RDA_ToString(op dsp.Op) string {
 	return fmt.Sprintf("RDA\t %d, %f",
 		op.Args[0].RawValue,
-		Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
 }
 
 func op_SOF_ToString(op dsp.Op) string {
@@ -118,8 +139,78 @@ func op_EXP_ToString(op dsp.Op) string {
 		Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
+func op_LOG_ToString(op dsp.Op) string {
+	return fmt.Sprintf("LOG\t %f, %f",
+		Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
+		Real4ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+}
+
+func op_WLDS_ToString(op dsp.Op) string {
+	addr := int(op.Args[0].RawValue)
+	freq := int(op.Args[1].RawValue)
+	typ := "SIN"
+	if op.Args[2].RawValue == 1 {
+		typ = "LFO"
+	}
+	return fmt.Sprintf("WLDS\t %s, %d, %d", typ, freq, addr)
+}
+
+func op_WLDR_ToString(op dsp.Op) string {
+	addr := int(op.Args[0].RawValue)
+	freq := int(op.Args[1].RawValue)
+	typ := "RAMP"
+	if op.Args[2].RawValue == 1 {
+		typ = "LFO"
+	}
+	return fmt.Sprintf("WLDR\t %s, %d, %d", typ, freq, addr)
+}
+
+func op_CHO(op dsp.Op) string {
+	addr := (int(op.Args[0].RawValue) << 1) >> 1
+	typ := "<?>"
+	switch op.Args[1].RawValue {
+	case 0b0:
+		typ = "SIN0"
+	case 0b01:
+		typ = "SIN1"
+	case 0b10:
+		typ = "RMP0"
+	case 0b11:
+		typ = "RMP1"
+	}
+	var flags []string
+	f := int(op.Args[3].RawValue)
+	if f != 0 {
+		for i := 0; i < len(dsp.ChoFlagSymbols); i++ {
+			if (f & (1 << i)) != 0 {
+				flags = append(flags, dsp.ChoFlagSymbols[f&(1<<i)])
+			}
+		}
+	} else {
+		flags = append(flags, dsp.ChoFlagSymbols[0])
+	}
+
+	cmd := ""
+	switch op.Args[4].RawValue {
+	case 0b10:
+		cmd = "SOF"
+	case 0b11:
+		cmd = "RDAL"
+	case 0b0:
+		cmd = "RDA"
+	default:
+		cmd = fmt.Sprintf("<%b>", op.Args[4].RawValue)
+	}
+
+	return fmt.Sprintf("CHO %s %s, %s, %d",
+		cmd, typ, strings.Join(flags, "|"), addr)
+}
+
 // S1.9 or S1.14: -2...1.9999
 func Real2ToFloat(bits int, raw uint32) float32 {
+	// FIXME: I suspect that this FP->FLOAT operation can be done
+	// by simple AND+SHIFT operations -- No logic needed (20220128
+	// handegar)
 	isSigned := raw >> (bits - 1)
 	num := (raw & dsp.ArgBitMasks[bits-1]) << 1
 	ret := (float32(num) / float32(dsp.ArgBitMasks[bits-1]))
@@ -132,9 +223,29 @@ func Real2ToFloat(bits int, raw uint32) float32 {
 
 // S.10: -1...0.999999
 func Real1ToFloat(bits int, raw uint32) float32 {
+	// FIXME: I suspect that this FP->FLOAT operation can be done
+	// by simple AND+SHIFT operations -- No logic needed (20220128
+	// handegar)
 	isSigned := raw >> (bits - 1)
-	num := (raw & dsp.ArgBitMasks[bits-1])
-	ret := (float32(num) / float32(dsp.ArgBitMasks[bits-1]))
+	unSigned := raw & dsp.ArgBitMasks[bits-1]
+	ret := float32(unSigned) / float32(int(1)<<(bits-1))
+
+	if isSigned == 1 {
+		return ret - 1.0
+	} else {
+		return ret
+	}
+}
+
+// S4.6: –16...15.999998
+func Real4ToFloat(bits int, raw uint32) float32 {
+	// FIXME: I suspect that this FP->FLOAT operation can be done
+	// by simple AND+SHIFT operations -- No logic needed (20220128
+	// handegar)
+	isSigned := raw >> (bits - 1)
+	unSigned := raw & dsp.ArgBitMasks[bits-1]
+	ret := float32(unSigned) / float32(int(1)<<(bits-(1+4)))
+
 	if isSigned == 1 {
 		return -ret
 	} else {

@@ -1,6 +1,8 @@
 package dsp
 
 // Bitmasks for the lower X bits
+// FIXME: This should be generated @ startup or by the compiler
+// (20220128 handegar)
 var ArgBitMasks = map[int]uint32{
 	32: 0b11111111111111111111111111111111,
 	24: 0b111111111111111111111111,
@@ -18,11 +20,15 @@ var ArgBitMasks = map[int]uint32{
 }
 
 const (
-	Real int = iota // S1.14
+	Real_1_14 int = iota // S1.14
+	Real_1_9
+	Real_10
+	Real_4_6
 	UInt
 	Int
 	Bin
 	Flag
+	Const
 	Blank
 )
 
@@ -39,80 +45,71 @@ type Op struct {
 }
 
 var Ops = map[uint32]Op{
-	// Accumulator instructions
 	0x0B: {"LOG",
-		[]OpArg{{16, Real, 0}, {11, Real, 0}}, // C * LOG(|ACC|) + D
+		[]OpArg{{11, Real_4_6, 0}, {16, Real_1_14, 0}},
 		0},
 	0x0C: {"EXP",
-		[]OpArg{{11, Real, 0}, {16, Real, 0}}, // C * EXP(ACC) + D
+		[]OpArg{{11, Real_10, 0}, {16, Real_1_14, 0}},
 		0},
 	0x0D: {"SOF",
-		[]OpArg{{11, Real, 0}, {16, Real, 0}}, // C * ACC + D
+		[]OpArg{{11, Real_10, 0}, {16, Real_1_14, 0}},
 		0},
-	0x0E: {"AND",
-		[]OpArg{{24, Bin, 0}}, // ACC & MASK  (Also CLR)
+	0x0E: {"AND", // Also CLR if arg=0
+		[]OpArg{{24, Bin, 0}},
 		0},
 	0x0F: {"OR",
-		[]OpArg{{24, Bin, 0}}, // ACC | MASK
+		[]OpArg{{24, Bin, 0}},
 		0},
-	0x10: {"XOR",
-		[]OpArg{{24, Bin, 0}}, // ACC ^ MASK  (Also NOT)
+	0x10: {"XOR", // Also NOT if arg=0xFFFFFFFF
+		[]OpArg{{24, Bin, 0}},
 		0},
 	0x11: {"SKP",
-		[]OpArg{{16, Blank, 0}, {6, UInt, 0}, {5, Flag, 0}}, // Jump according to test
+		[]OpArg{{16, Blank, 0}, {6, UInt, 0}, {5, Flag, 0}},
 		0},
-	// Delay ram instructions
 	0x00: {"RDA",
-		[]OpArg{{15, UInt, 0}, {1, Blank, 0}, {11, Real, 0}}, // SRAM[ADDR] * C + ACC
+		[]OpArg{{16, UInt, 0}, {11, Real_1_9, 0}},
 		0},
 	0x01: {"RMPA",
-		[]OpArg{{11, Real, 0}}, // SRAM[PNTR[N]] * C + ACC
+		[]OpArg{{16, Const, 24}, {11, Real_1_9, 0}},
 		0},
 	0x02: {"WRA",
-		[]OpArg{{15, UInt, 0}, {11, Real, 0}}, // ACC -> SRAM[ADDR], ACC * C
+		[]OpArg{{16, UInt, 0}, {11, Real_1_9, 0}},
 		0},
 	0x03: {"WRAP",
-		[]OpArg{{15, UInt, 0}, {11, Real, 0}}, // ACC -> SRAM[ADDR], (ACC*C) + LR
+		[]OpArg{{16, UInt, 0}, {11, Real_1_9, 0}},
 		0},
-	// Register instructions
 	0x04: {"RDAX",
-		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real, 0}}, // C * REG[ADDR] + ACC
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
 	0x06: {"WRAX",
-		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real, 0}}, // ACC -> REG[ADDR], C * ACC
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
-	0x09: {"MAXX",
-		[]OpArg{{6, UInt, 0}, {16, Real, 0}}, // MAX(|REG[ADDR] * C|, |ACC|)  (Also AVSA)
+	0x09: {"MAXX", // Also ABSA if all args=0
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
 	0x0A: {"MULX",
-		[]OpArg{{6, UInt, 0}, {21, Blank, 0}}, // ACC * REG[ADDR]
+		[]OpArg{{6, UInt, 0}, {21, Blank, 0}},
 		0},
-	0x05: {"RDFX",
-		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real, 0}}, // (ACC-REG[ADDR])*C + REG[ADDR]  (Also LDAX)
+	0x05: {"RDFX", // Also LDAX if all args=0
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
 	0x08: {"WRLX",
-		[]OpArg{{6, UInt, 0}, {16, Real, 0}}, // ACC -> REG[ADDR], (PACC-ACC)*C+PACC
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
 	0x07: {"WRHX",
-		[]OpArg{{6, UInt, 0}, {16, Real, 0}}, // ACC -> REG[ADDR], (ACC*C)+PACC
+		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
-	// LFO instructions
-	0x12: {"WLDx",
-		[]OpArg{{1, Flag, 0}, {9, UInt, 0}, {15, UInt, 0}}, // WLDS and WLDR
+	0x12: {"WLDx", // WLDS and WLDR (Last flag: 00->WLDS, 01->WLDR)
+		[]OpArg{{15, UInt, 0}, {9, UInt, 0}, {1, Flag, 0}, {2, UInt, 0}},
 		0},
 	0x13: {"JAM",
-		[]OpArg{{1, Flag, 0}}, // 0 -> RAMP LFO N
+		[]OpArg{{1, Const, 0}, {1, Flag, 0}, {21, Const, 1}},
 		0},
-	0x14: {"CHO", // CMD           C             N             ADDR
-		[]OpArg{{2, Flag, 0}, {6, Flag, 0}, {2, Flag, 0}, {16, UInt, 0}}, // special
+	0x14: {"CHO", //  SubCmd: 0b00=RDA, 0b10=SOF, 0b11=RDAL,
+		//       ADDR           N             0              FLAGS         SubCmd
+		[]OpArg{{16, UInt, 0}, {2, Flag, 0}, {1, Const, 0}, {6, Flag, 0}, {2, UInt, 0}},
 		0},
 }
-
-// LDAX = 00000000000000000000000000000101
-// RDFX = CCCCCCCCCCCCCCCC00000AAAAAA00101
-//RDFX=                         1000000101
-//RDFX=                         1010000101
-// 0b10000000010000000000000000010001
 
 var Symbols = map[int]string{
 	0x00:       "SIN0_RATE",  // (0)  SIN 0 rate
@@ -169,6 +166,24 @@ var Symbols = map[int]string{
 	0x20000000: "ZRO",        // USED with 'SKP' instruction: Skip if ACC = 0
 	0x10000000: "GEZ",        // USED with 'SKP' instruction: Skip if ACC is '>= 0'
 	0x8000000:  "NEG",        // USED with 'SKP' instruction: Skip if ACC is Negative
+}
+
+var SkpFlagSymbols = map[int]string{
+	0b00001: "NEG",
+	0b00010: "GEZ",
+	0b00100: "ZRO",
+	0b01000: "ZRC",
+	0b10000: "RUN",
+}
+
+var ChoFlagSymbols = map[int]string{
+	0x0:  "SIN",
+	0x1:  "COS",
+	0x2:  "REG",
+	0x4:  "COMPC",
+	0x8:  "COMPA",
+	0x10: "RPTR2",
+	0x20: "NA",
 }
 
 var SymbolEquivalents = map[int][]string{

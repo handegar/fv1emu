@@ -4,7 +4,7 @@ var Version = "0.1"
 
 var InputWav = "input.wav"
 var OutputWav = "output.wav"
-var HexFilename = ""
+var InFilename = ""
 
 var ProgramNo = 0
 

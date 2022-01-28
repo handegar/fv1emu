@@ -13,28 +13,54 @@ func DecodeOp(opcode uint32) Op {
 		op.Args = append(op.Args, a)
 	}
 
-	//fmt.Printf("Name=%s (0b%32b)\n", op.Name, opcode)
 	bitPos := 5 // Skip the opcode field
 	for i, arg := range op.Args {
 		var paramBits uint32 = opcode
 		paramBits = (opcode >> bitPos) & ArgBitMasks[arg.Len]
-		//fmt.Printf("Len=%d, Type=%s, RawValue=%b, Mask=0b%b (>> %d) \n", arg.Len, TypeToString(arg.Type), paramBits, ArgBitMasks[arg.Len], bitPos)
 		if arg.Type != Blank {
-			//newArg := OpArg{arg.Len, arg.Type, paramBits}
-			//op.Args = append(op.Args, newArg)
 			op.Args[i].RawValue = paramBits
 		}
 		bitPos += arg.Len
 	}
 
+	//
 	// Special cases
+	//
 	if op.Name == "RDFX" && op.Args[1].RawValue == 0 && op.Args[2].RawValue == 0 {
 		op.Name = "LDAX"
-		// Ignore first arg
+		// Ignore last arg
 		op.Args[2].Type = Blank
+	} else if op.Name == "CHO" {
+		switch op.Args[len(op.Args)-1].RawValue {
+		case 0b0:
+			op.Name = "CHO RDA"
+		case 0b10:
+			op.Name = "CHO SOF"
+		case 0b11:
+			op.Name = "CHO RDAL"
+		default:
+			op.Name = "CHO <?>"
+		}
+	} else if op.Name == "AND" {
+		if op.Args[0].RawValue == 0 {
+			op.Name = "CLR"
+		}
+	} else if op.Name == "XOR" {
+		if op.Args[0].RawValue == 0xFFFFFFFF {
+			op.Name = "NOT"
+		}
+	} else if op.Name == "MAXX" {
+		if op.Args[0].RawValue == 0 && op.Args[2].RawValue == 0 {
+			op.Name = "ABSA"
+		}
+	} else if op.Name == "WLDx" {
+		if op.Args[len(op.Args)-1].RawValue == 0 {
+			op.Name = "WLDS"
+		} else {
+			op.Name = "WLDR"
+		}
 	}
 
-	//fmt.Printf(" -> %d args\n", len(op.Args))
 	return op
 }
 
@@ -55,8 +81,16 @@ func ParseBuffer(buffer []uint32) []Op {
 
 func TypeToString(t int) string {
 	switch t {
-	case Real:
-		return "Real"
+	case Real_1_14:
+		return "Real_S1.14"
+	case Real_1_9:
+		return "Real_S1.9"
+	case Real_10:
+		return "Real_S.19"
+	case Real_4_6:
+		return "Real_S4.6"
+	case Const:
+		return "Const"
 	case UInt:
 		return "UInt"
 	case Int:
