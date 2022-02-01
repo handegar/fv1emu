@@ -1,4 +1,4 @@
-package dsp
+package base
 
 // Bitmasks for the lower X bits
 // FIXME: This should be generated @ startup or by the compiler
@@ -90,7 +90,7 @@ var Ops = map[uint32]Op{
 	0x0A: {"MULX",
 		[]OpArg{{6, UInt, 0}, {21, Blank, 0}},
 		0},
-	0x05: {"RDFX", // Also LDAX if all args=0
+	0x05: {"RDFX", // Also LDAX if all args 1&2 is 0
 		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
 	0x08: {"WRLX",
@@ -111,6 +111,7 @@ var Ops = map[uint32]Op{
 		0},
 }
 
+// Symbols as strings
 var Symbols = map[int]string{
 	0x00:       "SIN0_RATE",  // (0)  SIN 0 rate
 	0x01:       "SIN0_RANGE", // (1)  SIN 0 range
@@ -220,53 +221,71 @@ var SymbolEquivalents = map[int][]string{
 	},
 }
 
-var Registers = map[int]string{
-	0x00: "SIN0_RATE",
-	0x01: "SIN0_RANGE",
-	0x02: "SIN1_RATE",
-	0x03: "SIN1_RANGE",
-	0x04: "RMP0_RATE",
-	0x05: "RMP0_RANGE",
-	0x06: "RMP1_RATE",
-	0x07: "RMP1_RANGE",
-	0x10: "POT0",
-	0x11: "POT1",
-	0x12: "POT2",
-	0x14: "ADCL",
-	0x15: "ADCR",
-	0x16: "DACL",
-	0x17: "DACR",
-	0x18: "ADDR_PTR",
-	0x20: "REG0",
-	0x21: "REG1",
-	0x22: "REG2",
-	0x23: "REG3",
-	0x24: "REG4",
-	0x25: "REG5",
-	0x26: "REG6",
-	0x27: "REG7",
-	0x28: "REG8",
-	0x29: "REG9",
-	0x2a: "REG10",
-	0x2b: "REG11",
-	0x2c: "REG12",
-	0x2d: "REG13",
-	0x2e: "REG14",
-	0x2f: "REG15",
-	0x30: "REG16",
-	0x31: "REG17",
-	0x32: "REG18",
-	0x33: "REG19",
-	0x34: "REG20",
-	0x35: "REG21",
-	0x36: "REG22",
-	0x37: "REG23",
-	0x38: "REG24",
-	0x39: "REG25",
-	0x3a: "REG26",
-	0x3b: "REG27",
-	0x3c: "REG28",
-	0x3d: "REG29",
-	0x3e: "REG30",
-	0x3f: "REG31",
+// Common register names
+const (
+	SIN0_RATE   = 0
+	SIN0_RANGE  = 1
+	SIN1_RATE   = 2
+	SIN1_RANGE  = 3
+	RAMP0_RATE  = 4
+	RAMP0_RANGE = 5
+	RAMP1_RATE  = 6
+	RAMP1_RANGE = 7
+
+	ADCL     = 0x14
+	ADCR     = 0x15
+	DACL     = 0x16
+	DACR     = 0x17
+	ADDR_PTR = 0x18
+)
+
+var Registers = map[int]interface{}{
+	SIN0_RATE:   0,            // SIN0_RATE
+	SIN0_RANGE:  0,            // SIN0_RANGE
+	SIN1_RATE:   0,            // SIN1_RATE
+	SIN1_RANGE:  0,            // SIN1_RANGE
+	RAMP0_RATE:  0,            // RMP0_RATE
+	RAMP0_RANGE: 0,            // RMP0_RANGE
+	RAMP1_RATE:  0,            // RMP1_RATE
+	RAMP1_RANGE: 0,            // RMP1_RANGE
+	0x10:        float32(0.0), // POT0
+	0x11:        float32(0.0), // POT1
+	0x12:        float32(0.0), // POT2
+	ADCL:        float32(0.0), // ADCL
+	ADCR:        float32(0.0), // ADCR
+	DACL:        float32(0.0), // DACL
+	DACR:        float32(0.0), // DACR
+	ADDR_PTR:    int(0),       // ADDR_PTR
+	0x20:        float32(0.0), // REG0
+	0x21:        float32(0.0), // REG1
+	0x22:        float32(0.0), // REG2
+	0x23:        float32(0.0), // REG3
+	0x24:        float32(0.0), // REG4
+	0x25:        float32(0.0), // REG5
+	0x26:        float32(0.0), // REG6
+	0x27:        float32(0.0), // REG7
+	0x28:        float32(0.0), // REG8
+	0x29:        float32(0.0), // REG9
+	0x2a:        float32(0.0), // REG10
+	0x2b:        float32(0.0), // REG11
+	0x2c:        float32(0.0), // REG12
+	0x2d:        float32(0.0), // REG13
+	0x2e:        float32(0.0), // REG14
+	0x2f:        float32(0.0), // REG15
+	0x30:        float32(0.0), // REG16
+	0x31:        float32(0.0), // REG17
+	0x32:        float32(0.0), // REG18
+	0x33:        float32(0.0), // REG19
+	0x34:        float32(0.0), // REG20
+	0x35:        float32(0.0), // REG21
+	0x36:        float32(0.0), // REG22
+	0x37:        float32(0.0), // REG23
+	0x38:        float32(0.0), // REG24
+	0x39:        float32(0.0), // REG25
+	0x3a:        float32(0.0), // REG26
+	0x3b:        float32(0.0), // REG27
+	0x3c:        float32(0.0), // REG28
+	0x3d:        float32(0.0), // REG29
+	0x3e:        float32(0.0), // REG30
+	0x3f:        float32(0.0), // REG31
 }

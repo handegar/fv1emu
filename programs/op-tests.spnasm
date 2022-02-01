@@ -1,0 +1,107 @@
+;;
+;; FV-1 instruction tests
+;; (Not supposed to works as an effect)
+;;
+
+;; Load ADCL into AC
+RDAX ADCL, 1.0
+
+;; Write ACC*x into DACL
+WRAX DACL, 1.0
+
+;; Store largest value of |REG0*C| or |ACC|
+MAXX REG0, 1.0
+
+;; Multiply ACC and REG0. Store in ACC
+MULX REG0
+
+;; (ACC-REG0)*C + REG0
+RDFX REG0, 1.0
+
+;; ACC-> REG0, (PACC-ACC)*C + PACC -> ACC
+WRLX REG0, 1.0
+
+;; ACC->REG0, (ACC*C) + PACC -> ACC
+WRHX REG0, 1.0
+
+;; -------------------------------------
+
+;; SRAM[ADDR] * C + ACC
+RDA 1000, 1.5
+
+;; SRAM[PNTR[N]] * C + ACC
+RMPA 1.5
+
+;; ACC->SRAM[ADDR], ACC * C
+WRA 1000, 1.5
+
+;; ACC->SRAM[ADDR], (ACC*C) + LR
+WRAP 1000, 1.5
+
+;; -------------------------------------
+
+;; type, freq, ampl (sine)
+WLDS 0, 100, 10
+WLDS 1, 100, 10
+
+;; type, freq, ampl (ramp)
+WLDR 0, 100, 4096
+WLDR 1, 100, 4096
+
+;; Reset ramp0 or ramp1
+JAM 0
+JAM 1
+
+;; 
+CHO RDA, SIN0, SIN, 1000
+
+;;
+CHO SOF, SIN0, SIN, 1000
+
+;; LFO * 1 -> ACC
+CHO RDAL, SIN0
+CHO RDAL, SIN1
+CHO RDAL, RMP0
+CHO RDAL, RMP1
+
+;; -------------------------------------
+
+;; 0 -> ACC
+CLR
+
+;; ~ACC -> ACC
+NOT
+
+;; |ACC| -> ACC
+ABSA
+
+;; addr -> ACC
+LDAX REG0
+
+;; -------------------------------------
+
+;; Jmp
+SKP RUN, jmp_1
+
+;;  ACC*C + D
+SOF 0.5, 0.5    ;; SOF C, D
+
+;; ACC & MASK
+AND %10101010_10101010_10101010
+
+;; ACC | MASK
+OR %10101010_10101010_10101010
+
+;; ACC ^ MASK
+XOR %10101010_10101010_10101010
+
+jmp_1:
+
+;; C * LOG(|ACC|) + D
+LOG 0.5, 0.5
+
+;; C * EXP(ACC) + D
+EXP 0.8, 0.5
+
+
+
