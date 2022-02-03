@@ -12,46 +12,18 @@ func StringToQFormat(str string, intbits int, fractionbits int) uint32 {
 	if err != nil {
 		panic("Error parsing string to double")
 	}
-
-	if intbits == 1 && fractionbits == 9 {
-		return (uint32)(num*(1024.0/2.0)) & 0x7ff
-	} else if intbits == 1 && fractionbits == 14 {
-		return (uint32)(num*(32768.0/2.0)) & 0xffff
-	}
-
-	panic("Unsupported intbits/fractionbits combo")
+	return uint32(num*float64(int32(1)<<fractionbits)) & base.ArgBitMasks[intbits+fractionbits+1]
 }
 
 func QFormatToFloat64(raw uint32, intbits int, fractionbits int) float64 {
-	totalbits := intbits + fractionbits
-	isSigned := raw >> (totalbits)
-	_ = isSigned
-
-	if intbits == 1 && fractionbits == 9 {
-		i := (raw & (1 << fractionbits)) >> (fractionbits)
-		f := (raw & base.ArgBitMasks[fractionbits])
-		fmt.Printf("i=%d, f=%d (%b, %b)\n", i, f, i, f)
-
-		return float64(i) + float64(f)/float64(base.ArgBitMasks[fractionbits])
-
-		//return (uint32)(num*(1024.0/2.0)) & 0x7ff
-		//return float64(raw / 512)
-		/*
-			num := int32((raw & base.ArgBitMasks[totalbits-1]) << 1)
-			if isSigned == 1 {
-				num = -num
-			}
-
-			fmt.Printf("num=%d, isSigned=%d\n", num, isSigned)
-
-			r := float64(num) * math.Pow(2, -float64(fractionbits))
-			return r*/
-
-	} /*else if intbits == 1 && fractionbits == 14 {
-		return (uint32)(num*(32768.0/2.0)) & 0xffff
-	}*/
-
-	panic("Unsupported intbits/fractionbits combo")
+	totalbits := intbits + fractionbits + 1
+	p1 := uint32((1 << (totalbits - 1)) - 1)
+	p2 := uint32(1 << (totalbits - 1))
+	p3 := uint32(1 << fractionbits)
+	v1 := raw & p1
+	v2 := raw & p2
+	y1 := int32(v1) - int32(v2)
+	return float64(y1) / float64(int32(p3))
 }
 
 func PrintUInt32AsBinary(value uint32) {
@@ -97,22 +69,7 @@ func PrintUInt32AsQFormat(intbits int, fractionbits int, value uint32) {
 
 // S1.9 or S1.14: -2...1.9999
 func Real2ToFloat(bits int, raw uint32) float32 {
-	// FIXME: I suspect that this FP->FLOAT operation can be done
-	// by simple AND+SHIFT operations -- No logic needed (20220128
-	// handegar)
-
-	//PrintUInt32AsQFormat(1, bits-2, raw)
-
-	isSigned := raw >> (bits - 1)
-	num := (raw & base.ArgBitMasks[bits-1]) << 1
-	ret := (float32(num) / float32(base.ArgBitMasks[bits-1]))
-
-	if isSigned == 1 {
-		return -ret
-	} else {
-		return ret
-	}
-
+	return float32(QFormatToFloat64(raw, 1, bits-2))
 }
 
 // S.10: -1...0.999999
@@ -136,19 +93,7 @@ func Real1ToFloat(bits int, raw uint32) float32 {
 
 // S4.6: –16...15.999998
 func Real4ToFloat(bits int, raw uint32) float32 {
-	// FIXME: I suspect that this FP->FLOAT operation can be done
-	// by simple AND+SHIFT operations -- No logic needed (20220128
-	// handegar)
-
-	isSigned := raw >> (bits - 1)
-	unSigned := raw & base.ArgBitMasks[bits-1]
-	ret := float32(unSigned) / float32(int(1)<<(bits-(1+4)))
-
-	if isSigned == 1 {
-		return -ret
-	} else {
-		return ret
-	}
+	return float32(QFormatToFloat64(raw, 4, bits-5))
 }
 
 func TypeToString(t int) string {
