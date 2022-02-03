@@ -254,7 +254,6 @@ func Test_RegisterOps(t *testing.T) {
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
 		if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
-			//if float2Compare(state.ACC, float32(expected)) {
 			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
 		}
 	})
@@ -273,7 +272,6 @@ func Test_RegisterOps(t *testing.T) {
 
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
-		//if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
 		if float2Compare(state.ACC, float32(expected)) {
 			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
 		}
@@ -297,7 +295,6 @@ func Test_RegisterOps(t *testing.T) {
 
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
-		//if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
 		if float2Compare(state.ACC, float32(expected)) {
 			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
 		}
@@ -323,7 +320,6 @@ func Test_DelayRAMOps(t *testing.T) {
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
 		if math.Abs(float64(state.ACC)-float64(expected)) > 0.2 {
-			//if float2Compare(state.ACC, float32(expected)) {
 			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
 		}
 	})
@@ -343,7 +339,6 @@ func Test_DelayRAMOps(t *testing.T) {
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
 		if math.Abs(float64(state.ACC)-float64(expected)) > 0.2 {
-			//if float2Compare(state.ACC, float32(expected)) {
 			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
 		}
 	})
@@ -397,63 +392,131 @@ func Test_LFOOps(t *testing.T) {
 		state := NewState()
 		op := base.Ops[0x12]
 		op.Name = "WLDS"
-		op.Args[0].RawValue = 0x0a
-		op.Args[1].RawValue = 0x64
-		op.Args[2].RawValue = 0x0
-		op.Args[3].RawValue = 0x0
+		op.Args[0].RawValue = 0x0a // amp=10
+		op.Args[1].RawValue = 0x64 // freq=100
+		op.Args[2].RawValue = 0x0  // Sin0
 
 		applyOp(op, state)
+		if state.Registers[base.SIN0_RATE].(int) != 100 {
+			t.Fatalf("Expected Sin0.Freq=100, got %d", state.Registers[base.SIN0_RATE].(int))
+		}
+		if state.Registers[base.SIN0_RANGE].(int) != 10 {
+			t.Fatalf("Expected Sin0.Amplitude=10, got %d", state.Registers[base.SIN0_RANGE].(int))
+		}
 
-		// FIXME: Check SIN0-LFO (20220201 handegar)
-		// FIXME: Check SIN1-LFO (20220201 handegar)
+		op.Args[0].RawValue = 0x0a // amp=10
+		op.Args[1].RawValue = 0x64 // freq=100
+		op.Args[2].RawValue = 0x1  // Sin1
 
+		applyOp(op, state)
+		if state.Registers[base.SIN1_RATE].(int) != 100 {
+			t.Fatalf("Expected Sin1.Freq=100, got %d", state.Registers[base.SIN1_RATE].(int))
+		}
+		if state.Registers[base.SIN1_RANGE].(int) != 10 {
+			t.Fatalf("Expected Sin1.Amplitude=10, got %d", state.Registers[base.SIN1_RANGE].(int))
+		}
 	})
 
 	t.Run("WLDR", func(t *testing.T) {
 		state := NewState()
 		op := base.Ops[0x12]
 		op.Name = "WLDR"
-		op.Args[0].RawValue = 0x0a
-		op.Args[1].RawValue = 0x64
-		op.Args[2].RawValue = 0x1
-		op.Args[3].RawValue = 0x0
+		op.Args[0].RawValue = 0x0 // 0b00 -> 4096
+		op.Args[1].RawValue = 0x0
+		op.Args[2].RawValue = 0x64 // 100
+		op.Args[3].RawValue = 0x0  // Rmp0
 
 		applyOp(op, state)
 
-		// FIXME: Check RMP0-LFO (20220201 handegar)
-		// FIXME: Check RMP1-LFO (20220201 handegar)
+		if state.Registers[base.RAMP0_RATE].(int) != 100 {
+			t.Fatalf("Expected Ramp0.Freq=100, got %d", state.Registers[base.RAMP0_RATE].(int))
+		}
+		if state.Registers[base.RAMP0_RANGE].(int) != 4096 {
+			t.Fatalf("Expected Ramp0.Amplitude=4096, got %d", state.Registers[base.RAMP0_RANGE].(int))
+		}
+
+		op.Args[0].RawValue = 0x1 // 0b00 -> 2048
+		op.Args[1].RawValue = 0x0
+		op.Args[2].RawValue = 0x64 // 100
+		op.Args[3].RawValue = 0x1  // Rmp1
+		applyOp(op, state)
+
+		if state.Registers[base.RAMP1_RATE].(int) != 100 {
+			t.Fatalf("Expected Ramp1.Freq=100, got %d", state.Registers[base.RAMP1_RATE].(int))
+		}
+		if state.Registers[base.RAMP1_RANGE].(int) != 2048 {
+			t.Fatalf("Expected Ramp1.Amplitude=4096, got %d", state.Registers[base.RAMP1_RANGE].(int))
+		}
 	})
 
 	t.Run("JAM", func(t *testing.T) {
 		state := NewState()
+		state.Ramp0State.Value = 123.0
+		state.Ramp1State.Value = 234.0
+
 		op := base.Ops[0x13]
-		op.Args[0].RawValue = 0x0a
+		op.Args[0].RawValue = 0x0
 		op.Args[1].RawValue = 0x0
-		op.Args[2].RawValue = 0x1
+		op.Args[2].RawValue = 0x0
 
 		applyOp(op, state)
-		// FIXME: Check RMP0-LFO (20220201 handegar)
+		if float2Compare(float32(state.Ramp0State.Value), float32(0.0)) {
+			t.Errorf("Expected Ramo0State to be 0.0, got %f\n", state.Ramp0State.Value)
+		}
 
-		op.Args[1].RawValue = 0x0
+		op.Args[1].RawValue = 0x1
 		applyOp(op, state)
-		// FIXME: Check RMP1-LFO (20220201 handegar)
+		if float2Compare(float32(state.Ramp1State.Value), float32(0.0)) {
+			t.Errorf("Expected Ramp1State to be 0.0, got %f\n", state.Ramp1State.Value)
+		}
 	})
 
 	t.Run("CHO RDA", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 123.0
-		state.LR = 2.0
+		state.ACC = 0.0
+		state.Registers[base.SIN0_RANGE] = 1
+		state.Registers[base.SIN1_RANGE] = 1
+		for i := 0; i < 1000; i++ {
+			state.DelayRAM[1000+i] = 1.0 + float32(i)
+		}
 		op := base.Ops[0x14]
 		op.Name = "CHO RDA"
-		op.Args[0].RawValue = 0x3e8
-		op.Args[1].RawValue = 0x0
-		op.Args[2].RawValue = 0x0
-		op.Args[3].RawValue = 0x0
-		op.Args[4].RawValue = 0x0
+		op.Args[0].RawValue = 0x3e8 // 1000
+		op.Args[1].RawValue = 0x00  // Type (SIN0)
+		op.Args[3].RawValue = 0x0   // Flags
 
 		applyOp(op, state)
-		// FIXME: Verify result (20220201 handegar)
-		fmt.Println("CHO RDA not verified")
+		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(0, state))]) {
+			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(0, state))], state.ACC)
+		}
+
+		state.Registers[base.SIN0_RANGE] = 2
+		state.ACC = 0.0
+		state.Sin0State.Angle = 3.1415 / 2.0
+		applyOp(op, state)
+		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(0, state))]) {
+			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(0, state))], state.ACC)
+		}
+
+		state.ACC = 0.0
+		op.Args[1].RawValue = 0x01 // Type (SIN1)
+		state.Sin1State.Angle = 0.0
+		applyOp(op, state)
+		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(1, state))]) {
+			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(1, state))], state.ACC)
+		}
+
+		state.Registers[base.SIN0_RANGE] = 2
+		state.ACC = 0.0
+		state.Sin1State.Angle = 3.1415 / 2.0
+		applyOp(op, state)
+		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(1, state))]) {
+			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(1, state))], state.ACC)
+		}
+
+		// Ramp 0/1
+
+		fmt.Println("CHO RDA  RMPx, ... not verified")
 	})
 
 	t.Run("CHO SOF", func(t *testing.T) {
@@ -475,32 +538,47 @@ func Test_LFOOps(t *testing.T) {
 		state := NewState()
 		op := base.Ops[0x14]
 		op.Name = "CHO RDAL"
-		// SIN0
+
+		// Load SIN0 into ACC
 		op.Args[0].RawValue = 0x0
 		op.Args[1].RawValue = 0x0
 		op.Args[2].RawValue = 0x0
 		op.Args[3].RawValue = 0x2
 		op.Args[4].RawValue = 0x3
 
-		// FIXME: Verify results (20220201 handegar)
-
+		state.Sin0State.Angle = 3.14 / 2.0
+		state.Registers[base.SIN0_RANGE] = int(1)
 		applyOp(op, state)
-		fmt.Println("CHO RDAL, SIN0 not verified")
+		if float2Compare(state.ACC, float32(math.Sin(state.Sin0State.Angle)*float64(state.Registers[base.SIN0_RANGE].(int)))) {
+			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		}
 
 		// SIN1
 		op.Args[1].RawValue = 0x1
+		state.Sin1State.Angle = 3.14 / 2.0
+		state.Registers[base.SIN1_RANGE] = int(1)
 		applyOp(op, state)
-		fmt.Println("CHO RDAL, SIN1 not verified")
+		if float2Compare(state.ACC, float32(math.Sin(state.Sin1State.Angle)*float64(state.Registers[base.SIN1_RANGE].(int)))) {
+			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		}
 
 		// RMP0
 		op.Args[1].RawValue = 0x2
+		state.Ramp0State.Value = 1.23
+		state.Registers[base.RAMP0_RANGE] = int(2)
 		applyOp(op, state)
-		fmt.Println("CHO RDAL, RMP0 not verified")
+		if float2Compare(state.ACC, float32(state.Ramp0State.Value*float64(state.Registers[base.RAMP0_RANGE].(int)))) {
+			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		}
 
 		// RMP1
 		op.Args[1].RawValue = 0x3
+		state.Ramp1State.Value = 1.23
+		state.Registers[base.RAMP1_RANGE] = int(2)
 		applyOp(op, state)
-		fmt.Println("CHO RDAL, RMP1 not verified")
+		if float2Compare(state.ACC, float32(state.Ramp1State.Value*float64(state.Registers[base.RAMP1_RANGE].(int)))) {
+			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		}
 	})
 
 }

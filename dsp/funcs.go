@@ -8,7 +8,8 @@ import (
 )
 
 func DecodeOp(opcode uint32) base.Op {
-	opcodeNum := opcode & 0x1F
+	opcodeNum := opcode & 0x1F          // Lower 5 bits
+	subOpcodeNum := opcode & 0xc0000000 // Upper 2 bits
 	opOriginal := base.Ops[opcodeNum]
 
 	var op base.Op
@@ -18,6 +19,16 @@ func DecodeOp(opcode uint32) base.Op {
 	// Copy over all args
 	for _, a := range opOriginal.Args {
 		op.Args = append(op.Args, a)
+	}
+
+	// Special case for WLDR -> WLDS
+	if opcodeNum == 0x12 && subOpcodeNum == 0 {
+		op.Name = "WLDS"
+		op.Args = []base.OpArg{
+			{Len: 15, Type: base.UInt, RawValue: 0},
+			{Len: 9, Type: base.UInt, RawValue: 0},
+			{Len: 1, Type: base.Flag, RawValue: 0},
+			{Len: 2, Type: base.Const, RawValue: 0}}
 	}
 
 	bitPos := 5 // Skip the opcode field
@@ -49,23 +60,17 @@ func DecodeOp(opcode uint32) base.Op {
 			op.Name = "CHO <?>"
 		}
 	} else if op.Name == "AND" {
-		if op.Args[0].RawValue == 0 {
+		if op.Args[1].RawValue == 0 {
 			op.Name = "CLR"
 		}
-	} else if op.Name == "XOR" {
-		if op.Args[0].RawValue == 0xFFFFFFFF {
-			op.Name = "NOT"
-		}
+	} else if op.Name == "XOR" && op.Args[1].RawValue == 0xFFFFF8 {
+		op.Name = "NOT"
 	} else if op.Name == "MAXX" {
 		if op.Args[0].RawValue == 0 && op.Args[2].RawValue == 0 {
 			op.Name = "ABSA"
 		}
-	} else if op.Name == "WLDx" {
-		if op.Args[len(op.Args)-1].RawValue == 0 {
-			op.Name = "WLDS"
-		} else {
-			op.Name = "WLDR"
-		}
+	} else if op.Name == "SKP" && op.Args[1].RawValue == 0 && op.Args[2].RawValue == 0 {
+		op.Name = "NOP" // Undocumented but used by SpinASM
 	}
 
 	return op
@@ -76,7 +81,7 @@ func DecodeOpCodes(buffer []uint32) []base.Op {
 	for _, b := range buffer {
 		op := DecodeOp(b)
 
-		if op.Name == "SKP" && op.Args[1].RawValue == 0 {
+		if (op.Name == "SKP" || op.Name == "NOP") && op.Args[1].RawValue == 0 {
 			break
 		}
 
@@ -272,14 +277,14 @@ var opTable = map[string]interface{}{
 		}
 	},
 	"WLDR": func(op base.Op, state *State) {
-		amp := int(op.Args[0].RawValue)
-		freq := int(op.Args[1].RawValue)
-		if op.Args[2].RawValue == 0 { // RAMP0
+		amp := int(base.RampAmpValues[int(op.Args[0].RawValue)])
+		freq := int(op.Args[2].RawValue)
+		if op.Args[3].RawValue == 0 { // RAMP0
 			state.Registers[base.RAMP0_RATE] = freq
 			state.Registers[base.RAMP0_RANGE] = amp
 		} else { // RAMP1
 			state.Registers[base.RAMP1_RATE] = freq
-			state.Registers[base.RAMP1_RATE] = amp
+			state.Registers[base.RAMP1_RANGE] = amp
 		}
 	},
 	"JAM": func(op base.Op, state *State) {
@@ -294,18 +299,20 @@ var opTable = map[string]interface{}{
 		addr := (int(op.Args[0].RawValue) << 1) >> 1
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
-
 		// FIXME: Implement support for the flags here. (20220131 handegar)
 		_ = flags
 
-		lfo := GetLFOValue(typ, state)
-		state.ACC = state.ACC + state.DelayRAM[addr]*float32(lfo)
+		// FIXME: This var shall also be modulated (according to flags)
+		// (20220202 handegar)
+		var coefficient float32 = 1.0
+
+		offset := GetLFOValue(typ, state)
+		state.ACC = state.ACC + state.DelayRAM[addr+int(offset)]*coefficient
 	},
 	"CHO SOF": func(op base.Op, state *State) {
 		D := (int(op.Args[0].RawValue) << 1) >> 1
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
-
 		// FIXME: Implement support for the flags here. (20220131 handegar)
 		_ = flags
 

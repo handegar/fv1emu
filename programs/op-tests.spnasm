@@ -1,6 +1,6 @@
 ;;
 ;; FV-1 instruction tests
-;; (Not supposed to works as an effect)
+;; (NB: This is not an effect)
 ;;
 
 ;; Load ADCL into AC
@@ -27,7 +27,7 @@ WRHX REG0, 1.0
 ;; -------------------------------------
 
 ;; SRAM[ADDR] * C + ACC
-RDA 1000, 1.5
+RDA 1000, -0.5
 
 ;; SRAM[PNTR[N]] * C + ACC
 RMPA 1.5
@@ -82,6 +82,9 @@ LDAX REG0
 
 ;; Jmp
 SKP RUN, jmp_1
+
+;; Same as "SKP 0, 0"
+NOP
 
 ;;  ACC*C + D
 SOF 0.5, 0.5    ;; SOF C, D

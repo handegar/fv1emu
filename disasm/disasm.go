@@ -15,7 +15,7 @@ func PrintCodeListing(opCodes []base.Op) {
 	for pos, opCode := range opCodes {
 		op := OpCodeToString(opCode)
 		if opCode.Name == "SKP" {
-			skpTargets = append(skpTargets, int(opCode.Args[1].RawValue))
+			skpTargets = append(skpTargets, pos+int(opCode.Args[1].RawValue))
 		}
 
 		// Is current "pos" registered in 'skpTargets'?
@@ -37,11 +37,13 @@ func PrintCodeListing(opCodes []base.Op) {
 }
 
 func OpCodeToString(opcode base.Op) string {
-	ret := ""
+	ret := "  "
 
 	switch opcode.Name {
 	case "SKP":
 		ret += op_SKP_ToString(opcode)
+	case "NOP":
+		ret += op_NOP_ToString(opcode)
 	case "SOF":
 		ret += op_SOF_ToString(opcode)
 	case "EXP":
@@ -52,6 +54,8 @@ func OpCodeToString(opcode base.Op) string {
 		ret += op_OR(opcode)
 	case "XOR":
 		ret += op_XOR(opcode)
+	case "NOT":
+		ret += op_NOT(opcode)
 	case "LDAX":
 		ret += op_LDAX_ToString(opcode)
 	case "WRAX":
@@ -122,50 +126,54 @@ func OpCodeToString(opcode base.Op) string {
 }
 
 func op_CLR(op base.Op) string {
-	return fmt.Sprintf("CLR\t")
+	return fmt.Sprintf("CLR\t  ")
 }
 
 func op_ABSA(op base.Op) string {
-	return fmt.Sprintf("ABSA\t")
+	return fmt.Sprintf("ABSA\t  ")
 }
 
 func op_RMPA(op base.Op) string {
-	return fmt.Sprintf("RMPA\t %f",
+	return fmt.Sprintf("RMPA\t  %f",
 		utils.Real2ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
 func op_WRLX(op base.Op) string {
-	return fmt.Sprintf("WRLX\t %s, %f",
+	return fmt.Sprintf("WRLX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_WRHX(op base.Op) string {
-	return fmt.Sprintf("WRHX\t %s, %f",
+	return fmt.Sprintf("WRHX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_MAXX(op base.Op) string {
-	return fmt.Sprintf("MAXX\t %s, %f",
+	return fmt.Sprintf("MAXX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_JAM(op base.Op) string {
-	return fmt.Sprintf("JAM\t %d", op.Args[1].RawValue)
+	return fmt.Sprintf("JAM\t  %d", op.Args[1].RawValue)
 }
 
 func op_AND(op base.Op) string {
-	return fmt.Sprintf("AND\t %%%b", op.Args[0].RawValue)
+	return fmt.Sprintf("AND\t  %%%b", op.Args[1].RawValue)
 }
 
 func op_OR(op base.Op) string {
-	return fmt.Sprintf("OR\t %%%b", op.Args[0].RawValue)
+	return fmt.Sprintf("OR\t  %%%b", op.Args[1].RawValue)
 }
 
 func op_XOR(op base.Op) string {
-	return fmt.Sprintf("XOR\t %%%b", op.Args[0].RawValue)
+	return fmt.Sprintf("XOR\t  %%%b", op.Args[1].RawValue)
+}
+
+func op_NOT(op base.Op) string {
+	return fmt.Sprintf("NOT\t")
 }
 
 func op_SKP_ToString(op base.Op) string {
@@ -177,93 +185,97 @@ func op_SKP_ToString(op base.Op) string {
 		}
 	}
 
-	return fmt.Sprintf("SKP\t %s, addr_%d",
+	return fmt.Sprintf("SKP\t  %s, addr_%d",
 		strings.Join(cmds, "|"),
 		op.Args[1].RawValue+1)
 }
 
+func op_NOP_ToString(op base.Op) string {
+	return fmt.Sprintf("NOP\t  \t")
+}
+
 func op_LDAX_ToString(op base.Op) string {
-	return fmt.Sprintf("LDAX\t %s",
+	return fmt.Sprintf("LDAX\t  %s",
 		base.Symbols[int(op.Args[0].RawValue)])
 }
 
 func op_WRAX_ToString(op base.Op) string {
-	return fmt.Sprintf("WRAX\t %s, %f",
+	return fmt.Sprintf("WRAX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_RDAX_ToString(op base.Op) string {
-	return fmt.Sprintf("RDAX\t %s, %f",
+	return fmt.Sprintf("RDAX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_RDFX_ToString(op base.Op) string {
-	return fmt.Sprintf("RDFX\t %s, %f",
+	return fmt.Sprintf("RDFX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
 }
 
 func op_MULX_ToString(op base.Op) string {
-	return fmt.Sprintf("MULX\t %s",
+	return fmt.Sprintf("MULX\t  %s",
 		base.Symbols[int(op.Args[0].RawValue)])
 }
 
 func op_WRA_ToString(op base.Op) string {
-	return fmt.Sprintf("WRA\t %d, %f",
+	return fmt.Sprintf("WRA\t  %d, %f",
 		op.Args[0].RawValue,
 		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
 }
 
 func op_WRAP_ToString(op base.Op) string {
-	return fmt.Sprintf("WRAP\t %d, %f",
+	return fmt.Sprintf("WRAP\t  %d, %f",
 		op.Args[0].RawValue,
 		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
 }
 
 func op_RDA_ToString(op base.Op) string {
-	return fmt.Sprintf("RDA\t %d, %f",
+	return fmt.Sprintf("RDA\t  %d, %f",
 		op.Args[0].RawValue,
 		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
 }
 
 func op_SOF_ToString(op base.Op) string {
-	return fmt.Sprintf("SOF\t %f, %f",
+	return fmt.Sprintf("SOF\t  %f, %f",
 		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
 		utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
 func op_EXP_ToString(op base.Op) string {
-	return fmt.Sprintf("EXP\t %f, %f",
+	return fmt.Sprintf("EXP\t  %f, %f",
 		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
 		utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
 func op_LOG_ToString(op base.Op) string {
-	return fmt.Sprintf("LOG\t %f, %f",
+	return fmt.Sprintf("LOG\t  %f, %f",
 		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
 		utils.Real4ToFloat(op.Args[0].Len, op.Args[0].RawValue))
 }
 
 func op_WLDS_ToString(op base.Op) string {
-	addr := int(op.Args[0].RawValue)
+	amp := int(op.Args[0].RawValue)
 	freq := int(op.Args[1].RawValue)
-	typ := "SIN"
+	typ := "SIN0"
 	if op.Args[2].RawValue == 1 {
-		typ = "LFO"
+		typ = "SIN1"
 	}
-	return fmt.Sprintf("WLDS\t %s, %d, %d", typ, freq, addr)
+	return fmt.Sprintf("WLDS\t  %s, %d, %d", typ, freq, amp)
 }
 
 func op_WLDR_ToString(op base.Op) string {
-	addr := int(op.Args[0].RawValue)
-	freq := int(op.Args[1].RawValue)
-	typ := "RAMP"
-	if op.Args[2].RawValue == 1 {
-		typ = "LFO"
+	amp := base.RampAmpValues[int(op.Args[0].RawValue)]
+	freq := int(op.Args[2].RawValue)
+	typ := "RMP0"
+	if op.Args[3].RawValue == 1 {
+		typ = "RMP1"
 	}
-	return fmt.Sprintf("WLDR\t %s, %d, %d", typ, freq, addr)
+	return fmt.Sprintf("WLDR\t  %s, %d, %d", typ, freq, amp)
 }
 
 func op_CHO(op base.Op) string {
@@ -294,15 +306,20 @@ func op_CHO(op base.Op) string {
 	cmd := ""
 	switch op.Args[4].RawValue {
 	case 0b10:
-		cmd = "SOF"
+		return fmt.Sprintf("CHO\t  SOF, %s, %s, %d",
+			typ, strings.Join(flags, "|"), addr)
+
+	case 0b0:
+		return fmt.Sprintf("CHO\t  RDA, %s, %s, %d",
+			typ, strings.Join(flags, "|"), addr)
+
 	case 0b11:
 		cmd = "RDAL"
-	case 0b0:
-		cmd = "RDA"
+		return fmt.Sprintf("CHO\t  RDAL, %s", typ)
+
 	default:
-		cmd = fmt.Sprintf("<%b>", op.Args[4].RawValue)
+		cmd = fmt.Sprintf("<0b%b>", op.Args[4].RawValue)
 	}
 
-	return fmt.Sprintf("CHO %s %s, %s, %d",
-		cmd, typ, strings.Join(flags, "|"), addr)
+	return fmt.Sprintf("CHO %s\t", cmd)
 }

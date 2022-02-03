@@ -94,6 +94,8 @@ func main() {
 
 	floatToIntScaler := math.Pow(2, float64(wavFormat.BitsPerSample)-1)
 
+	nonZeroSample := false
+
 	fmt.Println("  Processing...")
 	// FIXME: Do some timing here (20220131 handegar)
 	start := time.Now()
@@ -117,14 +119,24 @@ func main() {
 
 			dsp.ProcessSample(opCodes, state)
 
+			outLeft := state.Registers[base.DACL].(float64) * floatToIntScaler
+			outRight := state.Registers[base.DACR].(float64) * floatToIntScaler
+
+			if outLeft > 2*math.SmallestNonzeroFloat64 ||
+				outRight > 2*math.SmallestNonzeroFloat64 {
+				nonZeroSample = true
+			}
+
 			outSamples = append(outSamples,
-				wav.Sample{[2]int{
-					int(state.Registers[base.DACL].(float64) * floatToIntScaler),
-					int(state.Registers[base.DACR].(float64) * floatToIntScaler)}})
+				wav.Sample{[2]int{int(outLeft), int(outRight)}})
 		}
 	}
 	duration := time.Since(start)
 	fmt.Printf("   -> ..took %s\n", duration)
+
+	if !nonZeroSample {
+		fmt.Println("* NOTE: All samples were zero, ie. no sound was produced")
+	}
 
 	fmt.Printf("* Writing to '%s'\n", settings.OutputWav)
 	outWAVFile, err := os.Create(settings.OutputWav)

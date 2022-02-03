@@ -9,6 +9,7 @@ var ArgBitMasks = map[int]uint32{
 	17: 0b11111111111111111,
 	16: 0b1111111111111111,
 	15: 0b111111111111111,
+	14: 0b11111111111111,
 	12: 0b111111111111,
 	11: 0b11111111111,
 	10: 0b1111111111,
@@ -55,15 +56,16 @@ var Ops = map[uint32]Op{
 		[]OpArg{{11, Real_10, 0}, {16, Real_1_14, 0}},
 		0},
 	0x0E: {"AND", // Also CLR if arg=0
-		[]OpArg{{24, Bin, 0}},
+		[]OpArg{{4, Blank, 0}, {24, Bin, 0}},
 		0},
 	0x0F: {"OR",
-		[]OpArg{{24, Bin, 0}},
+		[]OpArg{{4, Blank, 0}, {24, Bin, 0}},
 		0},
-	0x10: {"XOR", // Also NOT if arg=0xFFFFFFFF
-		[]OpArg{{24, Bin, 0}},
+
+	0x10: {"XOR", // Also NOT if arg=0xFFFFF8
+		[]OpArg{{4, Blank, 0}, {24, Bin, 0}},
 		0},
-	0x11: {"SKP",
+	0x11: {"SKP", // Also NOP if all args are 0
 		[]OpArg{{16, Blank, 0}, {6, UInt, 0}, {5, Flag, 0}},
 		0},
 	0x00: {"RDA",
@@ -99,8 +101,10 @@ var Ops = map[uint32]Op{
 	0x07: {"WRHX",
 		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
-	0x12: {"WLDx", // WLDS and WLDR (Last flag: 00->WLDS, 01->WLDR)
-		[]OpArg{{15, UInt, 0}, {9, UInt, 0}, {1, Flag, 0}, {2, UInt, 0}},
+	0x12: {"WLDR", // WLDS and WLDR (last flag: 00->WLDS, 01->WLDR)
+		[]OpArg{{2, Flag, 0}, {6, Blank, 0}, {16, UInt, 0}, {1, Flag, 0}, {2, Const, 1}},
+		// WLDS
+		//  []OpArg{{15, UInt, 0}, {9, UInt, 0}, {1, Flag, 0}, {2, Const, 0}},
 		0},
 	0x13: {"JAM",
 		[]OpArg{{1, Const, 0}, {1, Flag, 0}, {21, Const, 1}},
@@ -185,6 +189,15 @@ var ChoFlagSymbols = map[int]string{
 	0x8:  "COMPA",
 	0x10: "RPTR2",
 	0x20: "NA",
+}
+
+// FIXME: Double check that the list is not supposed to be reversed
+// (20220202 handegar)
+var RampAmpValues = map[int]uint32{
+	0: 4096,
+	1: 2048,
+	2: 1024,
+	3: 512,
 }
 
 var SymbolEquivalents = map[int][]string{
