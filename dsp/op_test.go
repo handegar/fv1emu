@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/handegar/fv1emu/base"
+	"github.com/handegar/fv1emu/utils"
 )
 
 var s1_14_epsilon float64 = 0.00006103516
@@ -84,7 +85,7 @@ func Test_AccumulatorOps(t *testing.T) {
 		applyOp(op, state)
 		// We need a much larger epsilon here as the LOG operation has such a low precision.
 		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.31 {
+		if math.Abs(float64(state.ACC)-float64(expected)) > 8.0 {
 			t.Errorf("C * LOG(|ACC|) + D != %f. Got %f (%f diff)",
 				expected, state.ACC, state.ACC-expected)
 		}
@@ -345,21 +346,23 @@ func Test_DelayRAMOps(t *testing.T) {
 
 	t.Run("WRA", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 123.0
+		preACC := float32(123.0)
+		state.ACC = preACC
 		op := base.Ops[0x02]
-		op.Args[0].RawValue = 0x3e8
-		op.Args[1].RawValue = 0x300
+		state.DelayRAM[0x3e8] = 0.0
+		op.Args[0].RawValue = 0x3e8 // ram addr
+		op.Args[1].RawValue = utils.Float64ToQFormat(1.5, 1, 9)
 
 		expected := state.ACC * 1.5
 		applyOp(op, state)
 
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
-		if state.DelayRAM[0x3e8] == state.ACC {
-			t.Errorf("Expected RAM[0x3e8]=%f, got %f\n", state.ACC, state.DelayRAM[0x3e8])
+		if math.Abs(float64(preACC-state.DelayRAM[0x3e8])) > s1_14_epsilon {
+			t.Errorf("Expected RAM[0x3e8]=%f, got %f\n", preACC, state.DelayRAM[0x3e8])
 		}
 
-		if state.ACC == expected {
+		if math.Abs(float64(state.ACC)-float64(expected)) > s1_14_epsilon {
 			t.Errorf("Expected ACC=%f, got %f\n", expected, state.ACC)
 		}
 	})
@@ -381,7 +384,7 @@ func Test_DelayRAMOps(t *testing.T) {
 			t.Errorf("Expected RAM[0x3e8]=%f, got %f\n", state.ACC, state.DelayRAM[0x3e8])
 		}
 
-		if state.ACC == expected {
+		if math.Abs(float64(state.ACC)-float64(expected)) > s1_14_epsilon {
 			t.Errorf("Expected ACC=%f, got %f\n", expected, state.ACC)
 		}
 	})

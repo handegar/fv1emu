@@ -12,7 +12,12 @@ func StringToQFormat(str string, intbits int, fractionbits int) uint32 {
 	if err != nil {
 		panic("Error parsing string to double")
 	}
-	return uint32(num*float64(int32(1)<<fractionbits)) & base.ArgBitMasks[intbits+fractionbits+1]
+	return Float64ToQFormat(num, intbits, fractionbits)
+}
+
+func Float64ToQFormat(val float64, intbits int, fractionbits int) uint32 {
+	// FIXME: Perform some limit-checks here (20220204 handegar)
+	return uint32(val*float64(int32(1)<<fractionbits)) & base.ArgBitMasks[intbits+fractionbits+1]
 }
 
 // Q<bits>.<bits> format (aka S<bits>.<bits>)
