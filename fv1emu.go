@@ -92,7 +92,7 @@ func main() {
 	fmt.Printf("* Reading '%s': %d channels, %dHz, %dbit\n",
 		settings.InputWav, wavFormat.NumChannels, wavFormat.SampleRate, wavFormat.BitsPerSample)
 
-	floatToIntScaler := math.Pow(2, float64(wavFormat.BitsPerSample)-1)
+	floatToIntScaler := 2 * math.Pow(2, float64(wavFormat.BitsPerSample)-1)
 
 	nonZeroSample := false
 
