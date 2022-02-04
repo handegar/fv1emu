@@ -119,19 +119,19 @@ func GetLFOValue(lfoType int, state *State) float64 {
 
 var opTable = map[string]interface{}{
 	"LOG": func(op base.Op, state *State) {
-		C := float64(utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
-		D := float64(utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+		C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
+		D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 4, 6))
 		state.ACC = float32(C*math.Log2(math.Abs(float64(state.ACC))) + D)
 	},
 	"EXP": func(op base.Op, state *State) {
-		C := float64(utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
-		D := float64(utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+		C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
+		D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 		state.ACC = float32(C*math.Exp2(float64(state.ACC)) + D)
 	},
 	"SOF": func(op base.Op, state *State) {
-		C := utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue)
-		D := utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue)
-		state.ACC = (C * state.ACC) + D
+		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14)
+		D := utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10)
+		state.ACC = float32((C * float64(state.ACC)) + D)
 	},
 	"AND": func(op base.Op, state *State) {
 		state.ACC = math.Float32frombits(math.Float32bits(state.ACC) & op.Args[0].RawValue)
@@ -177,61 +177,61 @@ var opTable = map[string]interface{}{
 	},
 	"RDA": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		C := utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue)
+		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
 		state.LR = state.DelayRAM[addr]
 		/*
 			fmt.Printf("RDA %f*%f + %f = %f\n",
 				state.DelayRAM[addr], C, state.ACC,
 				state.DelayRAM[addr]*C+state.ACC)
 		*/
-		state.ACC = state.DelayRAM[addr]*C + state.ACC
+		state.ACC = state.DelayRAM[addr]*float32(C) + state.ACC
 	},
 	"RMPA": func(op base.Op, state *State) {
-		C := utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue)
+		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
 		addr := state.Registers[base.ADDR_PTR].(int) // ADDR_PTR
 		state.LR = state.DelayRAM[addr]
-		state.ACC = state.DelayRAM[addr]*C + state.ACC
+		state.ACC = state.DelayRAM[addr]*float32(C) + state.ACC
 	},
 	"WRA": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		C := utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue)
+		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
 
 		//fmt.Printf("WRA acc=%f, C=%f, dram=%f\n", state.ACC*C, C, state.ACC)
 
 		state.DelayRAM[addr] = state.ACC
-		state.ACC = state.ACC * C
+		state.ACC = state.ACC * float32(C)
 
 	},
 	"WRAP": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		C := utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue)
+		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
 		/*
 			fmt.Printf("ACC=%f, %f*%f+%f=%f\n", state.ACC,
 				state.ACC, C, state.LR,
 				state.ACC*C+state.LR)
 		*/
 		state.DelayRAM[addr] = state.ACC
-		state.ACC = state.ACC*C + state.LR
+		state.ACC = state.ACC*float32(C) + state.LR
 	},
 	"RDAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue)
+		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
 		regValue := state.Registers[regNo].(float64)
 		//fmt.Printf("RDAX %f*%f + %f = %f (reg 0x%x)\n", C, regValue, state.ACC, C*float32(regValue)+state.ACC, regNo)
-		state.ACC = C*float32(regValue) + state.ACC
+		state.ACC = float32(regValue*C) + state.ACC
 	},
 	"WRAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue)
+		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
 
 		//fmt.Printf("WRAX 0x%x = %f*%f = %f\n", regNo, state.ACC, C, state.ACC*C)
 		state.Registers[regNo] = float64(state.ACC)
-		state.ACC = state.ACC * C
+		state.ACC = state.ACC * float32(C)
 
 	},
 	"MAXX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue)
+		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
 		regValue := state.Registers[regNo].(float64)
 		state.ACC = float32(math.Max(math.Abs(regValue*float64(C)), float64(state.ACC)))
 	},
@@ -245,9 +245,9 @@ var opTable = map[string]interface{}{
 	},
 	"RDFX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue)
+		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
 		regValue := state.Registers[regNo].(float64)
-		state.ACC = (state.ACC-float32(regValue))*C + float32(regValue)
+		state.ACC = float32((float64(state.ACC)-regValue)*C + regValue)
 	},
 	"LDAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
@@ -255,15 +255,15 @@ var opTable = map[string]interface{}{
 	},
 	"WRLX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue)
+		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
 		state.Registers[regNo] = float64(state.ACC)
-		state.ACC = (state.PACC-state.ACC)*C + state.PACC
+		state.ACC = (state.PACC-state.ACC)*float32(C) + state.PACC
 	},
 	"WRHX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue)
+		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
 		state.Registers[regNo] = float64(state.ACC)
-		state.ACC = state.ACC*C + state.PACC
+		state.ACC = state.ACC*float32(C) + state.PACC
 	},
 	"WLDS": func(op base.Op, state *State) {
 		amp := int(op.Args[0].RawValue)

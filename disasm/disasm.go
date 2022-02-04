@@ -135,25 +135,25 @@ func op_ABSA(op base.Op) string {
 
 func op_RMPA(op base.Op) string {
 	return fmt.Sprintf("RMPA\t  %f",
-		utils.Real2ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+		utils.QFormatToFloat64(op.Args[0].RawValue, 1, 9))
 }
 
 func op_WRLX(op base.Op) string {
 	return fmt.Sprintf("WRLX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
-		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
 func op_WRHX(op base.Op) string {
 	return fmt.Sprintf("WRHX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
-		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
 func op_MAXX(op base.Op) string {
 	return fmt.Sprintf("MAXX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
-		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
 func op_JAM(op base.Op) string {
@@ -202,19 +202,19 @@ func op_LDAX_ToString(op base.Op) string {
 func op_WRAX_ToString(op base.Op) string {
 	return fmt.Sprintf("WRAX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
-		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
 func op_RDAX_ToString(op base.Op) string {
 	return fmt.Sprintf("RDAX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
-		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
 func op_RDFX_ToString(op base.Op) string {
 	return fmt.Sprintf("RDFX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
-		utils.Real2ToFloat(op.Args[2].Len, op.Args[2].RawValue))
+		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
 func op_MULX_ToString(op base.Op) string {
@@ -225,37 +225,37 @@ func op_MULX_ToString(op base.Op) string {
 func op_WRA_ToString(op base.Op) string {
 	return fmt.Sprintf("WRA\t  %d, %f",
 		op.Args[0].RawValue,
-		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
 func op_WRAP_ToString(op base.Op) string {
 	return fmt.Sprintf("WRAP\t  %d, %f",
 		op.Args[0].RawValue,
-		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
 func op_RDA_ToString(op base.Op) string {
 	return fmt.Sprintf("RDA\t  %d, %f",
 		op.Args[0].RawValue,
-		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
 func op_SOF_ToString(op base.Op) string {
 	return fmt.Sprintf("SOF\t  %f, %f",
-		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
-		utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
+		utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 }
 
 func op_EXP_ToString(op base.Op) string {
 	return fmt.Sprintf("EXP\t  %f, %f",
-		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
-		utils.Real1ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
+		utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 }
 
 func op_LOG_ToString(op base.Op) string {
 	return fmt.Sprintf("LOG\t  %f, %f",
-		utils.Real2ToFloat(op.Args[1].Len, op.Args[1].RawValue),
-		utils.Real4ToFloat(op.Args[0].Len, op.Args[0].RawValue))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
+		utils.QFormatToFloat64(op.Args[0].RawValue, 4, 6))
 }
 
 func op_WLDS_ToString(op base.Op) string {
