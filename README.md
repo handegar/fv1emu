@@ -1,5 +1,5 @@
 # fv1emu
-A simple Spin FV-1 DPS emulator written in GOLang.
+A simple Spin FV-1 DSP emulator written in GOLang.
 
 NOTE: This is work in progress and not usable (yet)
 
