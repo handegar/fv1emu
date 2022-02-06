@@ -41,63 +41,63 @@ func OpCodeToString(opcode base.Op) string {
 
 	switch opcode.Name {
 	case "SKP":
-		ret += op_SKP_ToString(opcode)
+		ret += SKP_ToString(opcode)
 	case "NOP":
-		ret += op_NOP_ToString(opcode)
+		ret += NOP_ToString(opcode)
 	case "SOF":
-		ret += op_SOF_ToString(opcode)
+		ret += SOF_ToString(opcode)
 	case "EXP":
-		ret += op_EXP_ToString(opcode)
+		ret += EXP_ToString(opcode)
 	case "AND":
-		ret += op_AND(opcode)
+		ret += AND_ToString(opcode)
 	case "OR":
-		ret += op_OR(opcode)
+		ret += OR_ToString(opcode)
 	case "XOR":
-		ret += op_XOR(opcode)
+		ret += XOR_ToString(opcode)
 	case "NOT":
-		ret += op_NOT(opcode)
+		ret += NOT_ToString(opcode)
 	case "LDAX":
-		ret += op_LDAX_ToString(opcode)
+		ret += LDAX_ToString(opcode)
 	case "WRAX":
-		ret += op_WRAX_ToString(opcode)
+		ret += WRAX_ToString(opcode)
 	case "MULX":
-		ret += op_MULX_ToString(opcode)
+		ret += MULX_ToString(opcode)
 	case "WRA":
-		ret += op_WRA_ToString(opcode)
+		ret += WRA_ToString(opcode)
 	case "WRAP":
-		ret += op_WRAP_ToString(opcode)
+		ret += WRAP_ToString(opcode)
 	case "RDA":
-		ret += op_RDA_ToString(opcode)
+		ret += RDA_ToString(opcode)
 	case "RDAX":
-		ret += op_RDAX_ToString(opcode)
+		ret += RDAX_ToString(opcode)
 	case "RDFX":
-		ret += op_RDFX_ToString(opcode)
+		ret += RDFX_ToString(opcode)
 	case "LOG":
-		ret += op_LOG_ToString(opcode)
+		ret += LOG_ToString(opcode)
 	case "WLDS":
-		ret += op_WLDS_ToString(opcode)
+		ret += WLDS_ToString(opcode)
 	case "WLDR":
-		ret += op_WLDR_ToString(opcode)
+		ret += WLDR_ToString(opcode)
 	case "CHO RDA":
-		ret += op_CHO(opcode)
+		ret += CHO_ToString(opcode)
 	case "CHO SOF":
-		ret += op_CHO(opcode)
+		ret += CHO_ToString(opcode)
 	case "CHO RDAL":
-		ret += op_CHO(opcode)
+		ret += CHO_ToString(opcode)
 	case "JAM":
-		ret += op_JAM(opcode)
+		ret += JAM_ToString(opcode)
 	case "MAXX":
-		ret += op_MAXX(opcode)
+		ret += MAXX_ToString(opcode)
 	case "WRLX":
-		ret += op_WRLX(opcode)
+		ret += WRLX_ToString(opcode)
 	case "WRHX":
-		ret += op_WRHX(opcode)
+		ret += WRHX_ToString(opcode)
 	case "RMPA":
-		ret += op_RMPA(opcode)
+		ret += RMPA_ToString(opcode)
 	case "CLR":
-		ret += op_CLR(opcode)
+		ret += CLR_ToString(opcode)
 	case "ABSA":
-		ret += op_ABSA(opcode)
+		ret += ABSA_ToString(opcode)
 	default:
 		ret += fmt.Sprintf("<%s 0b%b>", opcode.Name, opcode.RawValue)
 	}
@@ -125,58 +125,58 @@ func OpCodeToString(opcode base.Op) string {
 	return ret
 }
 
-func op_CLR(op base.Op) string {
+func CLR_ToString(op base.Op) string {
 	return fmt.Sprintf("CLR\t  ")
 }
 
-func op_ABSA(op base.Op) string {
+func ABSA_ToString(op base.Op) string {
 	return fmt.Sprintf("ABSA\t  ")
 }
 
-func op_RMPA(op base.Op) string {
+func RMPA_ToString(op base.Op) string {
 	return fmt.Sprintf("RMPA\t  %f",
-		utils.QFormatToFloat64(op.Args[0].RawValue, 1, 9))
+		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
-func op_WRLX(op base.Op) string {
+func WRLX_ToString(op base.Op) string {
 	return fmt.Sprintf("WRLX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
-func op_WRHX(op base.Op) string {
+func WRHX_ToString(op base.Op) string {
 	return fmt.Sprintf("WRHX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
-func op_MAXX(op base.Op) string {
+func MAXX_ToString(op base.Op) string {
 	return fmt.Sprintf("MAXX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
-func op_JAM(op base.Op) string {
+func JAM_ToString(op base.Op) string {
 	return fmt.Sprintf("JAM\t  %d", op.Args[1].RawValue)
 }
 
-func op_AND(op base.Op) string {
+func AND_ToString(op base.Op) string {
 	return fmt.Sprintf("AND\t  %%%b", op.Args[1].RawValue)
 }
 
-func op_OR(op base.Op) string {
+func OR_ToString(op base.Op) string {
 	return fmt.Sprintf("OR\t  %%%b", op.Args[1].RawValue)
 }
 
-func op_XOR(op base.Op) string {
+func XOR_ToString(op base.Op) string {
 	return fmt.Sprintf("XOR\t  %%%b", op.Args[1].RawValue)
 }
 
-func op_NOT(op base.Op) string {
+func NOT_ToString(op base.Op) string {
 	return fmt.Sprintf("NOT\t")
 }
 
-func op_SKP_ToString(op base.Op) string {
+func SKP_ToString(op base.Op) string {
 	var cmds []string
 	flags := int(op.Args[2].RawValue)
 	for i := 0; i < len(base.SkpFlagSymbols); i++ {
@@ -190,75 +190,77 @@ func op_SKP_ToString(op base.Op) string {
 		op.Args[1].RawValue+1)
 }
 
-func op_NOP_ToString(op base.Op) string {
+func NOP_ToString(op base.Op) string {
 	return fmt.Sprintf("NOP\t  \t")
 }
 
-func op_LDAX_ToString(op base.Op) string {
+func LDAX_ToString(op base.Op) string {
 	return fmt.Sprintf("LDAX\t  %s",
 		base.Symbols[int(op.Args[0].RawValue)])
 }
 
-func op_WRAX_ToString(op base.Op) string {
+func WRAX_ToString(op base.Op) string {
+	regNo := int(op.Args[0].RawValue)
 	return fmt.Sprintf("WRAX\t  %s, %f",
-		base.Symbols[int(op.Args[0].RawValue)],
+		base.Symbols[regNo],
 		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
-func op_RDAX_ToString(op base.Op) string {
+func RDAX_ToString(op base.Op) string {
 	return fmt.Sprintf("RDAX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
-func op_RDFX_ToString(op base.Op) string {
+func RDFX_ToString(op base.Op) string {
 	return fmt.Sprintf("RDFX\t  %s, %f",
 		base.Symbols[int(op.Args[0].RawValue)],
 		utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14))
 }
 
-func op_MULX_ToString(op base.Op) string {
+func MULX_ToString(op base.Op) string {
 	return fmt.Sprintf("MULX\t  %s",
 		base.Symbols[int(op.Args[0].RawValue)])
 }
 
-func op_WRA_ToString(op base.Op) string {
+func WRA_ToString(op base.Op) string {
 	return fmt.Sprintf("WRA\t  %d, %f",
 		op.Args[0].RawValue,
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
-func op_WRAP_ToString(op base.Op) string {
+func WRAP_ToString(op base.Op) string {
 	return fmt.Sprintf("WRAP\t  %d, %f",
 		op.Args[0].RawValue,
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
-func op_RDA_ToString(op base.Op) string {
+func RDA_ToString(op base.Op) string {
 	return fmt.Sprintf("RDA\t  %d, %f",
 		op.Args[0].RawValue,
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
-func op_SOF_ToString(op base.Op) string {
+func SOF_ToString(op base.Op) string {
 	return fmt.Sprintf("SOF\t  %f, %f",
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
 		utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 }
 
-func op_EXP_ToString(op base.Op) string {
+func EXP_ToString(op base.Op) string {
 	return fmt.Sprintf("EXP\t  %f, %f",
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
 		utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 }
 
-func op_LOG_ToString(op base.Op) string {
+func LOG_ToString(op base.Op) string {
 	return fmt.Sprintf("LOG\t  %f, %f",
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
-		utils.QFormatToFloat64(op.Args[0].RawValue, 4, 6))
+		//utils.QFormatToFloat64(op.Args[0].RawValue, 4, 6))
+		utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 }
 
-func op_WLDS_ToString(op base.Op) string {
+func WLDS_ToString(op base.Op) string {
 	amp := int(op.Args[0].RawValue)
 	freq := int(op.Args[1].RawValue)
 	typ := "SIN0"
@@ -268,7 +270,7 @@ func op_WLDS_ToString(op base.Op) string {
 	return fmt.Sprintf("WLDS\t  %s, %d, %d", typ, freq, amp)
 }
 
-func op_WLDR_ToString(op base.Op) string {
+func WLDR_ToString(op base.Op) string {
 	amp := base.RampAmpValues[int(op.Args[0].RawValue)]
 	freq := int(op.Args[2].RawValue)
 	typ := "RMP0"
@@ -278,7 +280,7 @@ func op_WLDR_ToString(op base.Op) string {
 	return fmt.Sprintf("WLDR\t  %s, %d, %d", typ, freq, amp)
 }
 
-func op_CHO(op base.Op) string {
+func CHO_ToString(op base.Op) string {
 	addr := (int(op.Args[0].RawValue) << 1) >> 1
 	typ := "<?>"
 	switch op.Args[1].RawValue {

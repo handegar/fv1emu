@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/handegar/fv1emu/base"
@@ -17,13 +18,18 @@ func StringToQFormat(str string, intbits int, fractionbits int) uint32 {
 
 func Float64ToQFormat(val float64, intbits int, fractionbits int) uint32 {
 	// FIXME: Perform some limit-checks here (20220204 handegar)
-	return uint32(val*float64(int32(1)<<fractionbits)) & base.ArgBitMasks[intbits+fractionbits+1]
+	return uint32(val * math.Pow(2, float64(fractionbits)))
 }
 
 // Q<bits>.<bits> format (aka S<bits>.<bits>)
 // Ex: Q1.9, Q1.14, Q.10
 func QFormatToFloat64(raw uint32, intbits int, fractionbits int) float64 {
+	if intbits > 1 {
+		return qFormatToFloat64_alternative(raw, intbits, fractionbits)
+	}
+
 	totalbits := intbits + fractionbits + 1
+
 	p1 := uint32((1 << (totalbits - 1)) - 1)
 	p2 := uint32(1 << (totalbits - 1))
 	p3 := uint32(1 << fractionbits)
@@ -31,6 +37,20 @@ func QFormatToFloat64(raw uint32, intbits int, fractionbits int) float64 {
 	v2 := raw & p2
 	y1 := int32(v1) - int32(v2)
 	return float64(y1) / float64(int32(p3))
+
+}
+
+// This is an alternative "more academic" way to transform a Q-format
+// integer to a float. Needed to do S4.6 numbers-
+func qFormatToFloat64_alternative(raw uint32, intbits int, fractionbits int) float64 {
+	totalbits := intbits + fractionbits + 1
+	isSigned := raw >> (intbits + fractionbits)
+	unsigned := (raw & base.ArgBitMasks[totalbits-1])
+	ret := float64(unsigned) / float64(uint(1)<<fractionbits)
+	if isSigned == 1 {
+		ret = -ret
+	}
+	return ret
 }
 
 func PrintUInt32AsBinary(value uint32) {
@@ -62,8 +82,8 @@ func PrintUInt32AsQFormat(value uint32, intbits int, fractionbits int) {
 
 	if intbits > 0 {
 		fmt.Printf(" S   I   FRACTION\n")
-		fmt.Printf("[%b | ", value>>(totalbits-1))   // Signed bit
-		fmt.Printf("%b | ", (value<<1)>>(totalbits)) // Integer bit
+		fmt.Printf("[%b | ", value>>(totalbits-1)) // Signed bit
+		fmt.Printf("%b | ", (value&base.ArgBitMasks[totalbits-1])>>fractionbits)
 
 	} else {
 		fmt.Printf(" S   FRACTION\n")

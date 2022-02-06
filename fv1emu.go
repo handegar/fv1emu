@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/eiannone/keyboard"
 	wav "github.com/youpy/go-wav"
 
 	"github.com/handegar/fv1emu/base"
@@ -33,6 +34,8 @@ func parseCommandLineParameters() {
 	flag.BoolVar(&settings.PrintStats, "print-stats", settings.PrintStats, "Print program stats")
 	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode, "Print program code")
 	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug, "Print debug info with program code")
+
+	flag.BoolVar(&settings.StepDebug, "debug", settings.StepDebug, "Execute program step by step (oh baby!)")
 	flag.Parse()
 }
 
@@ -40,9 +43,18 @@ func main() {
 	fmt.Printf("* FV-1 emulator v%s\n", settings.Version)
 	parseCommandLineParameters()
 
+	if settings.StepDebug {
+		if err := keyboard.Open(); err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = keyboard.Close()
+		}()
+	}
+
 	if settings.InFilename == "" {
 		fmt.Println("No bin/hex file specified. Use the '-bin/-hex' parameter.")
-		syscall.Exit(-1)
+		return
 	}
 
 	var buf []uint32
@@ -51,13 +63,13 @@ func main() {
 		buf, err = reader.ReadBin(settings.InFilename)
 		if err != nil {
 			fmt.Printf("Reading BIN file failed: %s\n", err)
-			syscall.Exit(-1)
+			return
 		}
 	} else if strings.HasSuffix(settings.InFilename, ".hex") {
 		buf, err = reader.ReadHex(settings.InFilename)
 		if err != nil {
 			fmt.Printf("Reading HEX file failed: %s\n", err)
-			syscall.Exit(-1)
+			return
 		}
 	}
 
@@ -70,12 +82,12 @@ func main() {
 
 	if settings.InputWav == "" {
 		fmt.Println("No input WAV file specified. Use the '-in' parameter.")
-		syscall.Exit(-1)
+		return
 	}
 
 	if settings.OutputWav == "" {
 		fmt.Println("No output WAV file specified. Use the '-out' parameter.")
-		syscall.Exit(-1)
+		return
 	}
 
 	inWAVFile, _ := os.Open(settings.InputWav)
@@ -85,14 +97,14 @@ func main() {
 	wavFormat, err := reader.Format()
 	if err != nil {
 		fmt.Printf("Error fetching WAV format: %s\n", err)
-		syscall.Exit(-1)
+		return
 	}
 	isStereo := wavFormat.NumChannels == 2
 
 	fmt.Printf("* Reading '%s': %d channels, %dHz, %dbit\n",
 		settings.InputWav, wavFormat.NumChannels, wavFormat.SampleRate, wavFormat.BitsPerSample)
 
-	floatToIntScaler := 2 * math.Pow(2, float64(wavFormat.BitsPerSample)-1)
+	floatToIntScaler := float64(0x7FFF) / 2.0 //math.Pow(2, float64(wavFormat.BitsPerSample)-1)
 
 	nonZeroSample := false
 
@@ -136,6 +148,10 @@ func main() {
 
 	if !nonZeroSample {
 		fmt.Println("* NOTE: All samples were zero, ie. no sound was produced")
+	}
+
+	if settings.StepDebug {
+		return
 	}
 
 	fmt.Printf("* Writing to '%s'\n", settings.OutputWav)

@@ -24,3 +24,6 @@ var MaxNumberOfOps = 128
 var Pot0Value = 0.5
 var Pot1Value = 0.5
 var Pot2Value = 0.5
+
+// Step debugger
+var StepDebug = false

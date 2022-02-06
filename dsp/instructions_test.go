@@ -37,40 +37,57 @@ func Test_AccumulatorOps(t *testing.T) {
 
 	t.Run("AND", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0xFFFFFF)
+		state.ACC = float32(utils.QFormatToFloat64(0b1111, 1, 23))
 		op := base.Ops[0x0E]
-		op.Args[0].RawValue = 0xFFF
-		expected := math.Float32frombits(0xFFF000)
 
+		op.Args[1].RawValue = 0b1
+		expected := uint32(op.Args[1].RawValue)
 		applyOp(op, state)
-		if float2Compare(state.ACC, expected) {
-			t.Errorf("ACC & C != %f. Got %f", expected, state.ACC)
+
+		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
+		if ACC_bits != expected {
+			t.Errorf("ACC & C != 0b%b. Got 0b%b", expected, ACC_bits)
 		}
 	})
 
 	t.Run("OR", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0b10101010)
+		state.ACC = 0
 		op := base.Ops[0x0F]
-		op.Args[0].RawValue = 0b01010101
-		expected := math.Float32frombits(0b11111111)
+		// Set LSB
+		op.Args[1].RawValue = 0b1
+		expected := uint32(op.Args[1].RawValue)
+		applyOp(op, state)
+
+		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
+		if ACC_bits != expected {
+			t.Errorf("ACC | C != 0b%b. Got 0b%b", expected, ACC_bits)
+		}
+
+		// Set MSB
+		state.ACC = 0
+		op.Args[1].RawValue = 0b1 << 23
+		expected = uint32(op.Args[1].RawValue)
 
 		applyOp(op, state)
-		if float2Compare(state.ACC, expected) {
-			t.Errorf("ACC | C != %f. Got %f", expected, state.ACC)
+		ACC_bits = utils.Float64ToQFormat(float64(state.ACC), 1, 23)
+		if ACC_bits != expected {
+			t.Errorf("ACC | C != 0b%b. Got 0b%b", expected, ACC_bits)
 		}
 	})
 
 	t.Run("XOR", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0b1010)
+		state.ACC = float32(utils.QFormatToFloat64(0b1111, 1, 23))
 		op := base.Ops[0x10]
-		op.Args[0].RawValue = 0b0101
-		expected := math.Float32frombits(0b101)
 
+		op.Args[1].RawValue = 0b1
+		expected := 0b1111 ^ uint32(op.Args[1].RawValue)
 		applyOp(op, state)
-		if float2Compare(state.ACC, expected) {
-			t.Errorf("ACC ^ C != %f. Got %f", expected, state.ACC)
+
+		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
+		if ACC_bits != expected {
+			t.Errorf("ACC ^ C != 0b%b. Got 0b%b", expected, ACC_bits)
 		}
 	})
 
@@ -80,7 +97,7 @@ func Test_AccumulatorOps(t *testing.T) {
 		op := base.Ops[0x0B]
 		op.Args[0].RawValue = 0x200
 		op.Args[1].RawValue = 0x2000
-		expected := float32(0.5*math.Log2(math.Abs(float64(state.ACC))) + 0.8)
+		expected := float32(0.5*(math.Log10(float64(state.ACC))/math.Log10(2.0)/16.0) + 0.8)
 
 		applyOp(op, state)
 		// We need a much larger epsilon here as the LOG operation has such a low precision.
@@ -171,15 +188,15 @@ func Test_RegisterOps(t *testing.T) {
 		state.ACC = 1.0
 		state.Registers[base.ADCL] = 123.0
 		op := base.Ops[0x04]
-		op.Args[0].RawValue = 0x14
-		op.Args[2].RawValue = 0x4000
+		op.Args[0].RawValue = base.ADCL // addr, 6bit
+		op.Args[2].RawValue = 0x4000    // C, s1.14
 
 		expected := state.ACC + float32(state.Registers[base.ADCL].(float64)*1.0)
 		applyOp(op, state)
 
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
+		if math.Abs(float64(state.ACC)-float64(expected)) > s1_14_epsilon {
 			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
 		}
 	})
@@ -335,6 +352,18 @@ func Test_DelayRAMOps(t *testing.T) {
 		op.Args[1].RawValue = 0x300
 
 		expected := state.ACC + state.DelayRAM[state.Registers[base.ADDR_PTR].(int)]*1.5
+		applyOp(op, state)
+
+		// We need a much larger epsilon here it seems.
+		// FIXME: Double check this (20220201 handegar)
+		if math.Abs(float64(state.ACC)-float64(expected)) > 0.2 {
+			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		}
+
+		op.Args[0].RawValue = 0x0
+		op.Args[1].RawValue = 0x200 // 1.0
+
+		expected = state.ACC + state.DelayRAM[state.Registers[base.ADDR_PTR].(int)]*1.0
 		applyOp(op, state)
 
 		// We need a much larger epsilon here it seems.
