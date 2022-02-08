@@ -50,25 +50,41 @@ func ReadHex(filename string) ([]uint32, error) {
 
 	rdr := bufio.NewReader(file)
 
-	var ints []uint32
+	var bytes []byte
 	for {
 		line, _, err := rdr.ReadLine()
 		if err == io.EOF {
 			break
 		}
 
-		if len(line) == 11 && string(line) == ":00000001FF" {
+		recordTypeStr := line[1+2+4 : 1+2+4+2]
+		recordType := 0
+		_, err = fmt.Sscanf(string(recordTypeStr), "%X", &recordType)
+		if recordType == 1 {
 			break
+		} else if recordType != 0 {
+			continue
 		}
 
-		rawstr := line[1+2+4+2 : len(line)-2]
-		var val []byte = make([]byte, 4)
-		_, err = fmt.Sscanf(string(rawstr), "%X", &val)
+		numBytesStr := line[1 : 1+2]
+		numBytes := 0
+		_, err = fmt.Sscanf(string(numBytesStr), "%X", &numBytes)
+
+		var vals []byte = make([]byte, numBytes)
+		rawstr := line[len(line)-(2*numBytes)-2 : len(line)-2]
+		_, err = fmt.Sscanf(string(rawstr), "%X", &vals)
 		if err != nil {
 			return nil, err
 		}
 
-		ints = append(ints, binary.BigEndian.Uint32(val))
+		bytes = append(bytes, vals...)
+	}
+
+	// Collect all 32bits chunks
+	var ints []uint32
+	for i := 0; i < (len(bytes) - 4); i += 4 {
+		chunk := []byte{bytes[i], bytes[i+1], bytes[i+2], bytes[i+3]}
+		ints = append(ints, binary.BigEndian.Uint32(chunk))
 	}
 
 	return ints, err
