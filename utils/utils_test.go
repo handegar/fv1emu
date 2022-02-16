@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func floatTest(t *testing.T, intbits int, fracbits int, in uint32, expected float64, epsilon float64) {
+func floatTest(t *testing.T, intbits int, fracbits int, in int32, expected float64, epsilon float64) {
 	f := QFormatToFloat64(in, intbits, fracbits)
 	if math.Abs(float64(f)-expected) > epsilon {
 		if intbits == 0 {
@@ -16,6 +16,15 @@ func floatTest(t *testing.T, intbits int, fracbits int, in uint32, expected floa
 				intbits, fracbits, in, in, expected, f)
 		}
 	}
+}
+
+func Test_Real1ToFloat_S1_23(t *testing.T) {
+	var s23_epsilon float64 = 1.0 / float64(1<<23)
+	floatTest(t, 0, 23, 0, 0.0, s23_epsilon)
+	floatTest(t, 0, 23, 0b100000000000000000000000, -1.0, s23_epsilon)
+	floatTest(t, 0, 23, 0b011111111111111111111111, 1.0, s23_epsilon)
+	floatTest(t, 0, 23, 0b000000000000000000000001, s23_epsilon, s23_epsilon)
+	floatTest(t, 0, 23, 0b001111111111111111111111, 0.5, s23_epsilon)
 }
 
 func Test_Real1ToFloat_S_10(t *testing.T) {

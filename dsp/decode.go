@@ -11,7 +11,7 @@ func DecodeOp(opcode uint32) base.Op {
 
 	var op base.Op
 	op.Name = opOriginal.Name
-	op.RawValue = opcode
+	op.RawValue = int32(opcode)
 
 	// Copy over all args
 	for _, a := range opOriginal.Args {
@@ -31,9 +31,9 @@ func DecodeOp(opcode uint32) base.Op {
 	bitPos := 5 // Skip the opcode field
 	for i, arg := range op.Args {
 		var paramBits uint32 = opcode
-		paramBits = (opcode >> bitPos) & base.ArgBitMasks[arg.Len]
+		paramBits = (opcode >> bitPos) & ((1 << arg.Len) - 1)
 		if arg.Type != base.Blank {
-			op.Args[i].RawValue = paramBits
+			op.Args[i].RawValue = int32(paramBits)
 		}
 		bitPos += arg.Len
 	}

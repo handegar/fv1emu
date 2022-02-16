@@ -4,12 +4,12 @@ import (
 	"math"
 
 	"github.com/handegar/fv1emu/base"
-	"github.com/handegar/fv1emu/utils"
 )
 
 var opTable = map[string]interface{}{
 	"LOG": func(op base.Op, state *State) {
-		C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
+		//C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
 		// NOTE: According to the SPIN datasheet the second
 		// parameter for LOG is supposed to be a S4.6 number,
 		// but the ASFY1 assembler, the DISFY1 disassembler,
@@ -19,64 +19,70 @@ var opTable = map[string]interface{}{
 		// data-sheet is wrong.
 		// FIXME: Test agains the official SpinASM
 		// assembler. (20220205 handegar)
-		D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
+		//D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
+		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
-		//state.ACC = float32(C*math.Log2(math.Abs(float64(state.ACC))) + D)
-
-		// This is how SpinCAD does it:
-		x := 16.0 * 2.0 // NOTE: Just 16.0 seems to caus
-		state.ACC = float32(C*(math.Log10(float64(state.ACC))/math.Log10(2.0)/x) + D)
-
+		// C*LOG(|ACC|) + D
+		acc := state.ACC.Abs().ToFloat64()
+		state.workRegA.SetFloat64(math.Log10(acc) / math.Log10(2.0) / 16.0)
+		state.workRegA.Add(state.workReg0_10)
+		state.ACC.Copy(state.workRegA)
 	},
 	"EXP": func(op base.Op, state *State) {
-		C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
-		D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
-		state.ACC = float32(C*math.Exp2(float64(state.ACC)) + D)
+		//C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
+		//D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
+		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
+
+		// C*exp(ACC) + D
+		acc := state.ACC.ToFloat64()
+		state.workRegA.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
+		state.ACC.Copy(state.workRegA)
 	},
 	"SOF": func(op base.Op, state *State) {
-		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14)
-		D := utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10)
-		state.ACC = float32((C * float64(state.ACC)) + D)
+		//C := op.Args[1].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
+		//D := op.Args[0].RawValue // S.10
+		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
+
+		// C * ACC + D
+		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.workReg0_10)
+		state.ACC.Copy(state.workRegA)
 	},
 	"AND": func(op base.Op, state *State) {
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		state.ACC = float32(utils.QFormatToFloat64(ACC_bits&op.Args[1].RawValue, 1, 23))
+		state.ACC.And(op.Args[1].RawValue)
 	},
 	"CLR": func(op base.Op, state *State) {
-		state.ACC = 0.0
+		state.ACC.Clear()
 	},
 	"OR": func(op base.Op, state *State) {
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		state.ACC = float32(utils.QFormatToFloat64(ACC_bits|op.Args[1].RawValue, 1, 23))
+		state.ACC.Or(op.Args[1].RawValue)
 	},
 	"XOR": func(op base.Op, state *State) {
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		state.ACC = float32(utils.QFormatToFloat64(ACC_bits^op.Args[1].RawValue, 1, 23))
+		state.ACC.Xor(op.Args[1].RawValue)
 	},
 	"NOT": func(op base.Op, state *State) {
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		state.ACC = float32(utils.QFormatToFloat64(ACC_bits&^op.Args[1].RawValue, 1, 23))
+		state.ACC.Not(op.Args[1].RawValue)
 	},
 	"SKP": func(op base.Op, state *State) {
 		flags := int(op.Args[2].RawValue)
 		N := op.Args[1].RawValue
 		jmp := false
-		// FIXME: All flags must be fulfilled before
-		// jumping. (20220131 handegar)
-		if (flags&0b10000 > 0) && state.RUN_FLAG { // RUN
+
+		if (flags&base.SKP_RUN > 0) && state.RUN_FLAG == true { // RUN
 			jmp = true
 		}
-		if (flags&0b00010) > 0 && state.ACC >= 0 { // GEZ
+		if (flags&base.SKP_GEZ) > 0 && !state.ACC.IsSigned() { // GEZ
 			jmp = true
 		}
-		if (flags&0b00100) > 0 && state.ACC == 0 { // ZRO
+		if (flags&base.SKP_ZRO) > 0 && state.ACC.Value == 0 { // ZRO
 			jmp = true
 		}
-		if (flags&0b01000) > 0 &&
-			math.Signbit(float64(state.ACC)) != math.Signbit(float64(state.PACC)) { // ZRC
+		if (flags&base.SKP_ZRC) > 0 &&
+			(state.ACC.IsSigned() != state.PACC.IsSigned()) { // ZRC
 			jmp = true
 		}
-		if (flags&0b00001) > 0 && state.ACC < 0 { // NEG
+		if (flags&base.SKP_NEG) > 0 && state.ACC.IsSigned() { // NEG
 			jmp = true
 		}
 
@@ -86,127 +92,157 @@ var opTable = map[string]interface{}{
 	},
 	"RDA": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
+		//C := op.Args[1].RawValue // S1.9
+		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
 		delayValue := state.DelayRAM[idx]
-		state.LR = delayValue
-		state.ACC += delayValue * float32(C)
+		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
+
+		// SRAM[ADDR] * C + ACC
+		state.workRegA.Copy(state.LR).Mult(state.workReg1_9)
+		state.ACC.Add(state.workRegA)
 	},
 	"RMPA": func(op base.Op, state *State) {
-		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
-		addr := state.Registers[base.ADDR_PTR].(int) >> 8 // ADDR_PTR
+		//C := op.Args[1].RawValue                          // S1.9
+		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
+		addr := state.Registers[base.ADDR_PTR].Value >> 8               // ADDR_PTR
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
 		delayValue := state.DelayRAM[idx]
-		state.LR = delayValue
-		state.ACC += delayValue * float32(C)
+		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
+
+		// SRAM[PNTR[N]] * C + ACC
+		state.workRegA.Copy(state.LR).Mult(state.workReg1_9)
+		state.ACC.Add(state.workRegA)
 	},
 	"WRA": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
+		//C := op.Args[1].RawValue // S1.9
+		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
+
+		// ACC->SRAM[ADDR], ACC * C
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
-		state.DelayRAM[idx] = state.ACC
-		state.ACC = state.ACC * float32(C)
+		// FIXME: Rescale from S7.24 to S0.23. Is this correct? (20220212 handegar)
+		state.DelayRAM[idx] = (state.ACC.Value >> 1) & 0x00FF_FFFF
+		state.ACC.Mult(state.workReg1_9)
 	},
 	"WRAP": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		C := utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9)
+		//C := op.Args[1].RawValue                                        // S1.9
+		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
+
+		// ACC->SRAM[ADDR], (ACC*C) + LR
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
-		state.DelayRAM[idx] = state.ACC
-		state.ACC = state.ACC*float32(C) + state.LR
+		// FIXME: Rescale from S7.24 to S0.23. Is this correct? (20220212 handegar)
+		state.DelayRAM[idx] = (state.ACC.Value >> 1) & 0x00FF_FFFF
+		state.ACC.Mult(state.workReg1_9).Add(state.LR)
 	},
 	"RDAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
-		regValue := state.Registers[regNo].(float64)
-		state.ACC += float32(regValue * C)
+		//C := op.Args[2].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+		reg := state.GetRegister(regNo)
+
+		// (C * REG) + ACC
+		state.workRegA.Copy(reg).Mult(state.workReg1_14)
+		state.ACC.Add(state.workRegA)
 	},
 	"WRAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
-		if regNo == base.ADDR_PTR {
-			ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-			//fmt.Printf("WRITE ADDR_PTR %f/%d/[%24b]\n", state.ACC, int(ACC_bits), int(ACC_bits))
-			state.Registers[regNo] = int(ACC_bits)
-		} else {
-			state.Registers[regNo] = float64(state.ACC)
-		}
-		state.ACC = state.ACC * float32(C)
+		//C := op.Args[2].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+
+		// ACC->REG[ADDR], C * ACC
+		state.GetRegister(regNo).Copy(state.ACC)
+		state.ACC.Mult(state.workReg1_14)
 	},
 	"MAXX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
-		regValue := state.Registers[regNo].(float64)
-		state.ACC = float32(math.Max(math.Abs(regValue*float64(C)), float64(state.ACC)))
+		//C := op.Args[2].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+
+		// MAX(|REG[ADDR] * C|, |ACC| )
+		reg := state.GetRegister(regNo)
+		state.workRegA.Copy(reg).Mult(state.workReg1_14)
+		state.workRegB.Copy(state.ACC).Abs()
+		if state.workRegA.GreaterThan(state.workRegB) {
+			state.ACC.Copy(state.workRegA)
+		} else {
+			state.ACC.Copy(state.workRegB)
+		}
 	},
 	"ABSA": func(op base.Op, state *State) {
-		state.ACC = float32(math.Abs(float64(state.ACC)))
+		state.ACC.Abs()
 	},
 	"MULX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		regValue := 0.0
-		if regNo == base.ADDR_PTR {
-			regValue = float64(state.Registers[regNo].(int))
-		} else {
-			regValue = state.Registers[regNo].(float64)
-		}
-
-		state.ACC = state.ACC * float32(regValue)
+		reg := state.GetRegister(regNo)
+		state.ACC.Mult(reg)
 	},
 	"RDFX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
-		regValue := 0.0
-		if regNo == base.ADDR_PTR {
-			regValue = float64(state.Registers[regNo].(int))
-		} else {
-			regValue = state.Registers[regNo].(float64)
-		}
-		state.ACC = float32((float64(state.ACC)-regValue)*C + regValue)
+		//C := op.Args[2].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+		reg := state.GetRegister(regNo)
+
+		// (ACC - REG)*C + REG
+		state.workRegA.Copy(state.ACC)
+		state.workRegA.Sub(reg).Mult(state.workReg1_14).Add(reg)
+		state.ACC.Copy(state.workRegA)
 	},
 	"LDAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		if regNo == base.ADDR_PTR {
-			state.ACC = float32(state.Registers[regNo].(int))
-		} else {
-			state.ACC = float32(state.Registers[regNo].(float64))
-		}
+		reg := state.GetRegister(regNo)
+		state.ACC.Copy(reg)
 	},
 	"WRLX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
-		state.Registers[regNo] = float64(state.ACC)
-		state.ACC = (state.PACC-state.ACC)*float32(C) + state.PACC
+		//C := op.Args[2].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+
+		// ACC->REG[ADDR], (PACC-ACC)*C + PACC
+		state.GetRegister(regNo).Copy(state.ACC)
+		state.workRegA.Copy(state.PACC).Sub(state.ACC).Mult(state.workReg1_14).Add(state.PACC)
+		state.ACC.Copy(state.workRegA)
 	},
 	"WRHX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		C := utils.QFormatToFloat64(op.Args[2].RawValue, 1, 14)
-		state.Registers[regNo] = float64(state.ACC)
-		state.ACC = state.ACC*float32(C) + state.PACC
+		//C := op.Args[2].RawValue // S1.14
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+
+		// ACC->REG[ADDR], (ACC*C)+PACC
+		state.GetRegister(regNo).Copy(state.ACC)
+		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.PACC)
+		state.ACC.Copy(state.workRegA)
 	},
 	"WLDS": func(op base.Op, state *State) {
-		amp := int(op.Args[0].RawValue)
-		freq := int(op.Args[1].RawValue)
+		freq := op.Args[1].RawValue
+		amp := op.Args[0].RawValue
+
 		if op.Args[2].RawValue == 0 { // SIN0
-			state.Registers[base.SIN0_RATE] = freq
-			state.Registers[base.SIN0_RANGE] = amp
+			state.GetRegister(base.SIN0_RATE).SetInt32(freq)
+			state.GetRegister(base.SIN0_RANGE).SetInt32(amp)
+			state.Sin0State.Angle = 0
 		} else { // SIN1
-			state.Registers[base.SIN1_RATE] = freq
-			state.Registers[base.SIN1_RANGE] = amp
+			state.GetRegister(base.SIN1_RATE).SetInt32(freq)
+			state.GetRegister(base.SIN1_RANGE).SetInt32(amp)
+			state.Sin1State.Angle = 0
 		}
 	},
 	"WLDR": func(op base.Op, state *State) {
-		amp := int(base.RampAmpValues[int(op.Args[0].RawValue)])
-		freq := int(op.Args[2].RawValue)
+		amp := base.RampAmpValues[int(op.Args[0].RawValue)]
+		freq := op.Args[2].RawValue
 		if op.Args[3].RawValue == 0 { // RAMP0
-			state.Registers[base.RAMP0_RATE] = freq
-			state.Registers[base.RAMP0_RANGE] = amp
+			state.GetRegister(base.RAMP0_RATE).SetInt32(freq)
+			state.GetRegister(base.RAMP0_RANGE).SetInt32(amp)
+			state.Ramp0State.Value = 0
 		} else { // RAMP1
-			state.Registers[base.RAMP1_RATE] = freq
-			state.Registers[base.RAMP1_RANGE] = amp
+			state.GetRegister(base.RAMP1_RATE).SetInt32(freq)
+			state.GetRegister(base.RAMP1_RANGE).SetInt32(amp)
+			state.Ramp1State.Value = 0
 		}
 	},
 	"JAM": func(op base.Op, state *State) {
-		num := int(op.Args[1].RawValue)
+		num := op.Args[1].RawValue
 		if num == 0 {
 			state.Ramp0State.Value = 0
 		} else {
@@ -214,33 +250,58 @@ var opTable = map[string]interface{}{
 		}
 	},
 	"CHO RDA": func(op base.Op, state *State) {
-		addr := (int(op.Args[0].RawValue) << 1) >> 1
+		addr := int(op.Args[0].RawValue)
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
-		// FIXME: Implement support for the flags here. (20220131 handegar)
-		_ = flags
 
-		// FIXME: This var shall also be modulated (according to flags)
-		// (20220202 handegar)
-		var coefficient float32 = 1.0
+		if (flags&base.CHO_COS) != 0 && (typ == 0 || typ == 1) {
+			typ += 2 // Make SIN -> COS
+		}
 
-		offset := GetLFOValue(typ, state)
-		idx := capDelayRAMIndex(addr + state.DelayRAMPtr + int(offset))
-		state.ACC = state.ACC + state.DelayRAM[idx]*coefficient
+		lfoVal := GetLFOValue(typ, state)
+		var mod int32 = 1
+		_ = mod
+
+		if (flags&base.CHO_COMPA) != 0 && (typ == 0 || typ == 1) {
+			lfoVal = -lfoVal
+		}
+
+		if (flags & base.CHO_REG) != 0 {
+			// FIXME: What function does REG have? (20220206 handegar)
+		}
+		if (flags & base.CHO_RPTR2) != 0 {
+			// FIXME: Implement (20220206 handegar)
+		}
+
+		if (flags & base.CHO_COMPC) != 0 {
+			//lfoVal = GetLFOMaximum(typ, state) - lfoVal
+			//max := GetLFOMaximum(typ, state)
+			//mod = (max - lfoVal) / max
+		}
+
+		if (flags & 0x20) != 0 { // NA
+			// FIXME: Handle the NA flag here (20220207 handegar)
+		}
+
+		idx := capDelayRAMIndex(addr + state.DelayRAMPtr + int(lfoVal))
+		_ = idx
+		//state.ACC.SetValue(state.DelayRAM[idx]).Mult24Value(mod)
 	},
 	"CHO SOF": func(op base.Op, state *State) {
-		D := (int(op.Args[0].RawValue) << 1) >> 1
-		typ := int(op.Args[1].RawValue)
-		flags := int(op.Args[3].RawValue)
-		// FIXME: Implement support for the flags here. (20220131 handegar)
-		_ = flags
+		/*
+			D := int(op.Args[0].RawValue)
+			typ := int(op.Args[1].RawValue)
+			flags := int(op.Args[3].RawValue)
+			// FIXME: Implement support for the flags here. (20220131 handegar)
+			_ = flags
 
-		lfo := GetLFOValue(typ, state)
-		state.ACC = float32(float64(state.ACC) * lfo * float64(D))
+			lfo := GetLFOValue(typ, state)
+			//state.ACC.Mult24Value(int32(lfo * float64(D)))
+		*/
 	},
 	"CHO RDAL": func(op base.Op, state *State) {
-		typ := int(op.Args[1].RawValue)
-		state.ACC = float32(GetLFOValue(typ, state))
+		//typ := int(op.Args[1].RawValue)
+		//state.ACC.SetValue(int32(GetLFOValue(typ, state)))
 	},
 }
 

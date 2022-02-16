@@ -27,3 +27,6 @@ var Pot2Value = 0.5
 
 // Step debugger
 var StepDebug = false
+
+// Current samplerate
+var SampleRate = 44100.0

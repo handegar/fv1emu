@@ -23,123 +23,149 @@ func float1Compare(a float32, b float32) bool {
 func Test_AccumulatorOps(t *testing.T) {
 	t.Run("SOF", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		op := base.Ops[0x0D]
-		op.Args[0].RawValue = 0x200
-		op.Args[1].RawValue = 0x2000
-		expected := state.ACC*0.5 + 0.5
+		c := NewRegisterWithFloat64(0.3)
+		d := NewRegisterWithFloat64(0.2)
+		state.ACC.SetFloat64(0.5)
 
+		op := base.Ops[0x0D]
+		op.Args[0].RawValue = d.ToQFormat(0, 10)
+		op.Args[1].RawValue = c.ToQFormat(1, 14)
+		expected := NewRegisterWithFloat64((0.5 * 0.3) + 0.2)
+
+		// C * ACC + D
 		applyOp(op, state)
-		if float2Compare(state.ACC, expected) {
-			t.Errorf("SOF: ACC*C+D != %f. Got %f", expected, state.ACC)
+
+		if !state.ACC.EqualWithEpsilon(expected, 10) {
+			t.Errorf("SOF: ACC*C+D != 0x%x. Got 0x%x\n"+
+				"expected=%f\n     got=%f",
+				expected.Value, state.ACC.Value,
+				expected.ToFloat64(), state.ACC.ToFloat64())
 		}
 	})
 
 	t.Run("AND", func(t *testing.T) {
 		state := NewState()
-		state.ACC = float32(utils.QFormatToFloat64(0b1111, 1, 23))
+		state.ACC.SetWithIntsAndFracs(0b1111, 0, 23)
 		op := base.Ops[0x0E]
 
 		op.Args[1].RawValue = 0b1
-		expected := uint32(op.Args[1].RawValue)
+		expected := state.ACC.Value & op.Args[1].RawValue
 		applyOp(op, state)
 
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		if ACC_bits != expected {
-			t.Errorf("ACC & C != 0b%b. Got 0b%b", expected, ACC_bits)
+		if state.ACC.Value != expected {
+			t.Errorf("ACC & C != 0b%b. Got 0b%b", expected, state.ACC.Value)
 		}
 	})
 
 	t.Run("OR", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 0
+		state.ACC.Clear()
 		op := base.Ops[0x0F]
 		// Set LSB
 		op.Args[1].RawValue = 0b1
-		expected := uint32(op.Args[1].RawValue)
+		expected := state.ACC.Value | op.Args[1].RawValue
 		applyOp(op, state)
 
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		if ACC_bits != expected {
-			t.Errorf("ACC | C != 0b%b. Got 0b%b", expected, ACC_bits)
+		if state.ACC.Value != expected {
+			fmt.Printf("b%b | 0b%b\n", state.ACC.Value, op.Args[1].RawValue)
+			t.Errorf("ACC | C != 0b%b. Got 0b%b", expected, state.ACC.Value)
 		}
 
 		// Set MSB
-		state.ACC = 0
+		state.ACC.Clear()
 		op.Args[1].RawValue = 0b1 << 23
-		expected = uint32(op.Args[1].RawValue)
+		expected = state.ACC.Value | op.Args[1].RawValue
 
 		applyOp(op, state)
-		ACC_bits = utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		if ACC_bits != expected {
-			t.Errorf("ACC | C != 0b%b. Got 0b%b", expected, ACC_bits)
+		if state.ACC.Value != expected {
+			t.Errorf("ACC | C != 0b%b. Got 0b%b", expected, state.ACC.Value)
 		}
 	})
 
 	t.Run("XOR", func(t *testing.T) {
 		state := NewState()
-		state.ACC = float32(utils.QFormatToFloat64(0b1111, 1, 23))
+		state.ACC.SetWithIntsAndFracs(0b1111, 0, 23)
 		op := base.Ops[0x10]
 
 		op.Args[1].RawValue = 0b1
-		expected := 0b1111 ^ uint32(op.Args[1].RawValue)
+		expected := state.ACC.Value ^ op.Args[1].RawValue
 		applyOp(op, state)
 
-		ACC_bits := utils.Float64ToQFormat(float64(state.ACC), 1, 23)
-		if ACC_bits != expected {
-			t.Errorf("ACC ^ C != 0b%b. Got 0b%b", expected, ACC_bits)
+		if state.ACC.Value != expected {
+			t.Errorf("ACC ^ C != 0b%b. Got 0b%b", expected, state.ACC.Value)
 		}
 	})
 
 	t.Run("LOG", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0x200)
+		//a := utils.Float64ToQFormat(0.3, 1, 23)
+		state.ACC.SetFloat64(0.3)
 		op := base.Ops[0x0B]
-		op.Args[0].RawValue = 0x200
-		op.Args[1].RawValue = 0x2000
-		expected := float32(0.5*(math.Log10(float64(state.ACC))/math.Log10(2.0)/16.0) + 0.8)
+		c := utils.Float64ToQFormat(0.5, 1, 14)
+		d := utils.Float64ToQFormat(0.8, 1, 10) // S4.6 accoring to doc, but that seems wrong
+
+		op.Args[0].RawValue = c
+		op.Args[1].RawValue = d
+		expectedF := 0.5*(math.Log10(0.3)/math.Log10(2.0)/16.0) + 0.8
+		expected := NewRegisterWithFloat64(expectedF)
 
 		applyOp(op, state)
 		// We need a much larger epsilon here as the LOG operation has such a low precision.
 		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 8.0 {
-			t.Errorf("C * LOG(|ACC|) + D != %f. Got %f (%f diff)",
-				expected, state.ACC, state.ACC-expected)
+		if !state.ACC.Equal(expected) {
+			t.Errorf("C * LOG(|ACC|) + D != 0x%x. Got 0x%x",
+				expected.Value, state.ACC.Value)
 		}
 	})
 
 	t.Run("EXP", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0x200)
+		//a := utils.Float64ToQFormat(0.3, 1, 23)
+		state.ACC.SetFloat64(0.3)
 		op := base.Ops[0x0C]
-		op.Args[0].RawValue = 0x200
-		op.Args[1].RawValue = 0x3333
-		expected := float32(0.8*math.Exp(float64(state.ACC)) + 0.5)
+		c := utils.Float64ToQFormat(0.5, 1, 14)
+		d := utils.Float64ToQFormat(0.8, 1, 10)
+		op.Args[0].RawValue = c
+		op.Args[1].RawValue = d
+		expectedF := 0.5*math.Exp(0.3) + 0.8
+		expected := NewRegisterWithFloat64(expectedF)
 
 		applyOp(op, state)
-		if float2Compare(state.ACC, expected) {
-			t.Errorf("C * EXP(ACC) + D != %f. Got %f (%f diff)",
-				expected, state.ACC, state.ACC-expected)
+		if !state.ACC.Equal(expected) {
+			t.Errorf("C * EXP(ACC) + D != 0x%x. Got 0x%x",
+				expected.Value, state.ACC.Value)
 		}
 	})
 
 	t.Run("SKP", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0x200)
+		state.ACC.Value = 0x200
 		op := base.Ops[0x11]
 		op.Args[0].RawValue = 0x0
 		op.Args[1].RawValue = 0x4
 
-		op.Args[2].RawValue = 0x10 // RUN
-		expected := state.IP + 0x4
+		op.Args[2].RawValue = base.SKP_RUN
+		expected := state.IP
 		applyOp(op, state)
 		if state.IP != expected {
 			t.Errorf("Expected SKP RUN IP=%d, got %d",
 				expected, state.IP)
 		}
 
-		op.Args[2].RawValue = 0x1 // NEG
-		state.ACC = -1.0
+		state.RUN_FLAG = true
+		op.Args[2].RawValue = base.SKP_RUN
+		expected = state.IP + 4
+		applyOp(op, state)
+		if state.IP != expected {
+			t.Errorf("Expected SKP RUN IP=%d, got %d",
+				expected, state.IP)
+		}
+
+		op.Args[2].RawValue = base.SKP_NEG
+		state.ACC.SetFloat64(-0.5)
+		if !state.ACC.IsSigned() {
+			t.Errorf("ACC.IsSigned() does not work")
+		}
 		state.IP = 0
 		expected = state.IP + 0x4
 		applyOp(op, state)
@@ -148,8 +174,8 @@ func Test_AccumulatorOps(t *testing.T) {
 				expected, state.IP)
 		}
 
-		op.Args[2].RawValue = 0b00010 // GEZ
-		state.ACC = 1.0
+		op.Args[2].RawValue = base.SKP_GEZ
+		state.ACC.SetFloat64(0.5)
 		state.IP = 0
 		expected = state.IP + 0x4
 		applyOp(op, state)
@@ -158,8 +184,8 @@ func Test_AccumulatorOps(t *testing.T) {
 				expected, state.IP)
 		}
 
-		op.Args[2].RawValue = 0b00100 // ZRO
-		state.ACC = 0.0
+		op.Args[2].RawValue = base.SKP_ZRO
+		state.ACC.Clear()
 		state.IP = 0
 		expected = state.IP + 0x4
 		applyOp(op, state)
@@ -168,9 +194,9 @@ func Test_AccumulatorOps(t *testing.T) {
 				expected, state.IP)
 		}
 
-		op.Args[2].RawValue = 0b01000 // ZRC
-		state.ACC = -1.0
-		state.PACC = 1.0
+		op.Args[2].RawValue = base.SKP_ZRC
+		state.ACC.SetFloat64(-0.5)
+		state.PACC.SetFloat64(0.3)
 		state.IP = 0
 		expected = state.IP + 0x4
 		applyOp(op, state)
@@ -185,140 +211,144 @@ func Test_AccumulatorOps(t *testing.T) {
 func Test_RegisterOps(t *testing.T) {
 	t.Run("RDAX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.Registers[base.ADCL] = 123.0
+		//a := utils.Float64ToQFormat(0.5, 1, 23)
+		state.ACC.SetFloat64(0.5)
+
+		//adcl := utils.Float64ToQFormat(0.4, 1, 23)
+		state.GetRegister(base.ADCL).SetFloat64(0.4)
 		op := base.Ops[0x04]
 		op.Args[0].RawValue = base.ADCL // addr, 6bit
-		op.Args[2].RawValue = 0x4000    // C, s1.14
+		c := utils.Float64ToQFormat(0.3, 1, 14)
+		op.Args[2].RawValue = c // C, s1.14
 
-		expected := state.ACC + float32(state.Registers[base.ADCL].(float64)*1.0)
+		expected := NewRegisterWithFloat64(0.3*0.4 + 0.5)
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > s1_14_epsilon {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if !state.ACC.Equal(expected) {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected.Value)
 		}
 	})
 
 	t.Run("WRAX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 123.0
+		a := utils.Float64ToQFormat(1.0, 1, 23)
+		state.ACC.SetFloat64(1.0)
 		op := base.Ops[0x06]
-		op.Args[0].RawValue = 0x16
-		op.Args[2].RawValue = 0x4000
+		op.Args[0].RawValue = base.DACL
+		c := utils.Float64ToQFormat(0.5, 1, 14)
+		op.Args[2].RawValue = c
 
-		expected := 1.0 * 123.0
+		expected := a * c
 		applyOp(op, state)
 
-		if state.Registers[base.DACL].(float64) != 123.0 {
-			t.Errorf("Expected DACL=%f, got %f\n", 123.0, state.Registers[base.DACL].(float64))
+		if state.GetRegister(base.DACL).Value != a {
+			t.Errorf("Expected DACL=0x%x, got 0x%x\n", a, state.GetRegister(base.DACL).Value)
 		}
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 	})
 
 	t.Run("MAXX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.Registers[0x20] = 123.0 // REG0
+		state.ACC.Value = 1
+		state.GetRegister(0x20).Value = 123 // REG0
 		op := base.Ops[0x09]
 		op.Args[0].RawValue = 0x20
 		op.Args[2].RawValue = 0x4000
 
-		expected := math.Max(float64(state.Registers[0x20].(float64))*1.0,
-			math.Abs(float64(state.ACC)))
+		expected := int32(math.Max(float64(state.GetRegister(0x20).Value),
+			math.Abs(float64(state.ACC.Value))))
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value == expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 	})
 
 	t.Run("MULX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.Registers[0x20] = 123.0 // REG0
+		state.ACC.Value = 1
+		state.GetRegister(0x20).Value = 123 // REG0
 		op := base.Ops[0x0A]
 		op.Args[0].RawValue = 0x20
 
-		expected := float64(state.Registers[0x20].(float64)) * float64(state.ACC)
+		expected := int32(float64(state.GetRegister(0x20).Value) * float64(state.ACC.Value))
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 	})
 
 	t.Run("RDFX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.Registers[0x20] = 123.0 // REG0
+		a := utils.Float64ToQFormat(1.0, 1, 23)
+		state.ACC.SetFloat64(1.0)
+		r := utils.Float64ToQFormat(0.1, 1, 23)
+		state.GetRegister(0x20).SetFloat64(0.1) // REG0
 		op := base.Ops[0x05]
-		op.Args[0].RawValue = 0x20
-		op.Args[2].RawValue = 0x4000
+		op.Args[0].RawValue = 0x20 // REG0
+		c := utils.Float64ToQFormat(1.0, 1, 14)
+		op.Args[2].RawValue = c
 
-		expected := (float64(state.ACC)-state.Registers[0x20].(float64))*1.0 + state.Registers[0x20].(float64)
+		expected := int32((a-r)*c + r)
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.0039 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 	})
 
 	t.Run("WRLX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.PACC = 2.0
-		state.Registers[0x20] = 123.0 // REG0
+		a := utils.Float64ToQFormat(1.0, 1, 23)
+		state.ACC.SetFloat64(1.0)
+		pa := utils.Float64ToQFormat(2.0, 1, 23)
+		state.PACC.SetFloat64(2.0)
+		state.GetRegister(0x20).SetFloat64(0.1) // REG0
 		op := base.Ops[0x08]
 		op.Args[0].RawValue = 0x20
-		op.Args[2].RawValue = 0x4000
+		c := utils.Float64ToQFormat(0.5, 1, 14)
+		op.Args[2].RawValue = c
 
-		expected := (state.PACC-state.ACC)*1.0 + state.PACC
+		expected := (pa-a)*c + pa
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if float2Compare(state.ACC, float32(expected)) {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 
-		if state.Registers[0x20].(float64) != 1.0 {
-			t.Errorf("Expected REG0=%f, got %f\n", 1.0, state.Registers[0x20].(float64))
+		if state.GetRegister(0x20).Value != a {
+			t.Errorf("Expected REG0=0x%x, got 0x%x\n", a,
+				state.GetRegister(0x20).Value)
 		}
 	})
 
 	t.Run("WRHX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.PACC = 2.0
-		state.Registers[0x20] = 123.0 // REG0
+		a := utils.Float64ToQFormat(1.0, 1, 23)
+		state.ACC.SetFloat64(1.0)
+		pa := utils.Float64ToQFormat(2.0, 1, 23)
+		state.PACC.SetFloat64(2.0)
+		state.GetRegister(0x20).SetFloat64(0.1) // REG0
 		op := base.Ops[0x07]
 		op.Args[0].RawValue = 0x20
-		op.Args[2].RawValue = 0x4000
+		c := utils.Float64ToQFormat(0.5, 1, 14)
+		op.Args[2].RawValue = c
 
-		expected := state.ACC*1.0 + state.PACC
+		expected := a*c + pa
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if float2Compare(state.ACC, float32(expected)) {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 
-		if state.Registers[0x20].(float64) != 1.0 {
-			t.Errorf("Expected REG0=%f, got %f\n", 1.0, state.Registers[0x20].(float64))
+		if state.GetRegister(0x20).Value != a {
+			t.Errorf("Expected REG0=0x%x, got 0x%x\n",
+				op.Args[2].RawValue,
+				state.GetRegister(0x20).Value)
 		}
 	})
 }
@@ -326,95 +356,95 @@ func Test_RegisterOps(t *testing.T) {
 func Test_DelayRAMOps(t *testing.T) {
 	t.Run("RDA", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.DelayRAM[0x3e8] = 123.0
+		state.ACC.Value = 1
+		state.DelayRAM[0x3e8] = 123
 		op := base.Ops[0x0]
 		op.Args[0].RawValue = 0x3e8
 		op.Args[1].RawValue = 0x300
 
-		expected := state.ACC + state.DelayRAM[0x3e8]*1.5
+		expected := state.ACC.Value + state.DelayRAM[0x3e8]*op.Args[1].RawValue
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.2 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 	})
 
 	t.Run("RMPA", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 1.0
-		state.Registers[base.ADDR_PTR] = 99
-		state.DelayRAM[0x3e8] = 123.0
+		state.ACC.Value = 1
+		state.GetRegister(base.ADDR_PTR).Value = 99
+		state.DelayRAM[0x3e8] = 123
 		op := base.Ops[0x01]
 		op.Args[0].RawValue = 0x0
 		op.Args[1].RawValue = 0x300
 
-		expected := state.ACC + state.DelayRAM[state.Registers[base.ADDR_PTR].(int)]*1.5
+		expected :=
+			state.ACC.Value +
+				state.DelayRAM[state.GetRegister(base.ADDR_PTR).Value]*op.Args[1].RawValue
 		applyOp(op, state)
 
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.2 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 
 		op.Args[0].RawValue = 0x0
 		op.Args[1].RawValue = 0x200 // 1.0
 
-		expected = state.ACC + state.DelayRAM[state.Registers[base.ADDR_PTR].(int)]*1.0
+		expected =
+			state.ACC.Value +
+				state.DelayRAM[state.GetRegister(base.ADDR_PTR).Value]*op.Args[1].RawValue
 		applyOp(op, state)
 
 		// We need a much larger epsilon here it seems.
 		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(state.ACC)-float64(expected)) > 0.2 {
-			t.Errorf("Expected ACC=%f, got %f\n", state.ACC, expected)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", state.ACC.Value, expected)
 		}
 	})
 
 	t.Run("WRA", func(t *testing.T) {
 		state := NewState()
-		preACC := float32(123.0)
-		state.ACC = preACC
+		preACC := int32(123)
+		state.ACC.Value = preACC
 		op := base.Ops[0x02]
 		state.DelayRAM[0x3e8] = 0.0
 		op.Args[0].RawValue = 0x3e8 // ram addr
 		op.Args[1].RawValue = utils.Float64ToQFormat(1.5, 1, 9)
 
-		expected := state.ACC * 1.5
+		expected := state.ACC.Value * op.Args[1].RawValue
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if math.Abs(float64(preACC-state.DelayRAM[0x3e8])) > s1_14_epsilon {
-			t.Errorf("Expected RAM[0x3e8]=%f, got %f\n", preACC, state.DelayRAM[0x3e8])
+		if preACC != state.DelayRAM[0x3e8] {
+			t.Errorf("Expected RAM[0x3e8]=0x%x, got 0x%x\n", preACC, state.DelayRAM[0x3e8])
 		}
 
-		if math.Abs(float64(state.ACC)-float64(expected)) > s1_14_epsilon {
-			t.Errorf("Expected ACC=%f, got %f\n", expected, state.ACC)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n", expected, state.ACC.Value)
 		}
 	})
 
 	t.Run("WRAP", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 123.0
-		state.LR = 2.0
+		state.ACC.Value = 123
+		state.LR.Value = 2
 		op := base.Ops[0x03]
 		op.Args[0].RawValue = 0x3e8
 		op.Args[1].RawValue = 0x300
 
-		expected := (state.ACC * 1.5) + state.LR
+		expected := (state.ACC.Value * op.Args[1].RawValue) + state.LR.Value
 		applyOp(op, state)
 
-		// We need a much larger epsilon here it seems.
-		// FIXME: Double check this (20220201 handegar)
-		if state.DelayRAM[0x3e8] == state.ACC {
-			t.Errorf("Expected RAM[0x3e8]=%f, got %f\n", state.ACC, state.DelayRAM[0x3e8])
+		if state.DelayRAM[0x3e8] == state.ACC.Value {
+			t.Errorf("Expected RAM[0x3e8]=0x%x, got 0x%x\n",
+				state.ACC.Value, state.DelayRAM[0x3e8])
 		}
 
-		if math.Abs(float64(state.ACC)-float64(expected)) > s1_14_epsilon {
-			t.Errorf("Expected ACC=%f, got %f\n", expected, state.ACC)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n",
+				expected, state.ACC.Value)
 		}
 	})
 }
@@ -429,11 +459,13 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[2].RawValue = 0x0  // Sin0
 
 		applyOp(op, state)
-		if state.Registers[base.SIN0_RATE].(int) != 100 {
-			t.Fatalf("Expected Sin0.Freq=100, got %d", state.Registers[base.SIN0_RATE].(int))
+		if state.GetRegister(base.SIN0_RATE).Value != op.Args[1].RawValue {
+			t.Fatalf("Expected Sin0.Freq=0x%x, got 0x%x",
+				op.Args[1].RawValue, state.GetRegister(base.SIN0_RATE).Value)
 		}
-		if state.Registers[base.SIN0_RANGE].(int) != 10 {
-			t.Fatalf("Expected Sin0.Amplitude=10, got %d", state.Registers[base.SIN0_RANGE].(int))
+		if state.GetRegister(base.SIN0_RANGE).Value != op.Args[0].RawValue {
+			t.Fatalf("Expected Sin0.Amplitude=0x%x, got 0x%x",
+				op.Args[0].RawValue, state.GetRegister(base.SIN0_RANGE).Value)
 		}
 
 		op.Args[0].RawValue = 0x0a // amp=10
@@ -441,11 +473,13 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[2].RawValue = 0x1  // Sin1
 
 		applyOp(op, state)
-		if state.Registers[base.SIN1_RATE].(int) != 100 {
-			t.Fatalf("Expected Sin1.Freq=100, got %d", state.Registers[base.SIN1_RATE].(int))
+		if state.GetRegister(base.SIN1_RATE).Value != op.Args[1].RawValue {
+			t.Fatalf("Expected Sin1.Freq=0x%x, got 0x%x",
+				op.Args[1].RawValue, state.GetRegister(base.SIN1_RATE).Value)
 		}
-		if state.Registers[base.SIN1_RANGE].(int) != 10 {
-			t.Fatalf("Expected Sin1.Amplitude=10, got %d", state.Registers[base.SIN1_RANGE].(int))
+		if state.GetRegister(base.SIN1_RANGE).Value != op.Args[0].RawValue {
+			t.Fatalf("Expected Sin1.Amplitude=0x%x, got 0x%x",
+				op.Args[0].RawValue, state.GetRegister(base.SIN1_RANGE).Value)
 		}
 	})
 
@@ -460,11 +494,14 @@ func Test_LFOOps(t *testing.T) {
 
 		applyOp(op, state)
 
-		if state.Registers[base.RAMP0_RATE].(int) != 100 {
-			t.Fatalf("Expected Ramp0.Freq=100, got %d", state.Registers[base.RAMP0_RATE].(int))
+		if state.GetRegister(base.RAMP0_RATE).Value != op.Args[2].RawValue {
+			t.Fatalf("Expected Ramp0.Freq=0x%x, got 0x%x",
+				op.Args[2].RawValue, state.GetRegister(base.RAMP0_RATE).Value)
 		}
-		if state.Registers[base.RAMP0_RANGE].(int) != 4096 {
-			t.Fatalf("Expected Ramp0.Amplitude=4096, got %d", state.Registers[base.RAMP0_RANGE].(int))
+		if state.GetRegister(base.RAMP0_RANGE).Value != base.RampAmpValues[int(op.Args[0].RawValue)] {
+			t.Fatalf("Expected Ramp0.Amplitude=%d, got %d",
+				base.RampAmpValues[int(op.Args[0].RawValue)],
+				state.GetRegister(base.RAMP0_RANGE).Value)
 		}
 
 		op.Args[0].RawValue = 0x1 // 0b00 -> 2048
@@ -473,11 +510,14 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[3].RawValue = 0x1  // Rmp1
 		applyOp(op, state)
 
-		if state.Registers[base.RAMP1_RATE].(int) != 100 {
-			t.Fatalf("Expected Ramp1.Freq=100, got %d", state.Registers[base.RAMP1_RATE].(int))
+		if state.GetRegister(base.RAMP1_RATE).Value != op.Args[2].RawValue {
+			t.Fatalf("Expected Ramp1.Freq=0x%x, got 0x%x",
+				op.Args[2].RawValue, state.GetRegister(base.RAMP1_RATE).Value)
 		}
-		if state.Registers[base.RAMP1_RANGE].(int) != 2048 {
-			t.Fatalf("Expected Ramp1.Amplitude=4096, got %d", state.Registers[base.RAMP1_RANGE].(int))
+		if state.GetRegister(base.RAMP1_RANGE).Value != base.RampAmpValues[int(op.Args[0].RawValue)] {
+			t.Fatalf("Expected Ramp1.Amplitude=%d, got %d",
+				base.RampAmpValues[int(op.Args[0].RawValue)],
+				state.GetRegister(base.RAMP1_RANGE).Value)
 		}
 	})
 
@@ -505,11 +545,11 @@ func Test_LFOOps(t *testing.T) {
 
 	t.Run("CHO RDA", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 0.0
-		state.Registers[base.SIN0_RANGE] = 1
-		state.Registers[base.SIN1_RANGE] = 1
+		state.ACC.Clear()
+		state.GetRegister(base.SIN0_RANGE).Value = 125
+		state.GetRegister(base.SIN1_RANGE).Value = 125
 		for i := 0; i < 1000; i++ {
-			state.DelayRAM[1000+i] = 1.0 + float32(i)
+			state.DelayRAM[1000+i] = int32(1 + i)
 		}
 		op := base.Ops[0x14]
 		op.Name = "CHO RDA"
@@ -518,36 +558,43 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[3].RawValue = 0x0   // Flags
 
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(0, state))]) {
-			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(0, state))], state.ACC)
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state))] {
+			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
+				state.DelayRAM[1000+int(GetLFOValue(0, state))],
+				state.ACC.Value)
 		}
 
-		state.Registers[base.SIN0_RANGE] = 2
-		state.ACC = 0.0
+		state.GetRegister(base.SIN0_RANGE).Value = 2
+		state.ACC.Clear()
 		state.Sin0State.Angle = 3.1415 / 2.0
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(0, state))]) {
-			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(0, state))], state.ACC)
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state))] {
+			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
+				state.DelayRAM[1000+int(GetLFOValue(0, state))],
+				state.ACC.Value)
 		}
 
-		state.ACC = 0.0
+		state.ACC.Clear()
 		op.Args[1].RawValue = 0x01 // Type (SIN1)
 		state.Sin1State.Angle = 0.0
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(1, state))]) {
-			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(1, state))], state.ACC)
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state))] {
+			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
+				state.DelayRAM[1000+int(GetLFOValue(1, state))],
+				state.ACC.Value)
 		}
 
-		state.Registers[base.SIN0_RANGE] = 2
-		state.ACC = 0.0
+		state.GetRegister(base.SIN0_RANGE).SetFloat64(2.0)
+		state.ACC.Clear()
 		state.Sin1State.Angle = 3.1415 / 2.0
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC), state.DelayRAM[1000+int(GetLFOValue(1, state))]) {
-			t.Errorf("Expected ACC to be %f, got %f\n", state.DelayRAM[1000+int(GetLFOValue(1, state))], state.ACC)
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state))] {
+			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
+				state.DelayRAM[1000+int(GetLFOValue(1, state))],
+				state.ACC.Value)
 		}
 
-		// Ramp 0/1
-
+		// FXIME: Ramp 0/1
 		fmt.Println("CHO RDA  RMPx, ... not verified")
 	})
 
@@ -579,37 +626,41 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[4].RawValue = 0x3
 
 		state.Sin0State.Angle = 3.14 / 2.0
-		state.Registers[base.SIN0_RANGE] = int(1)
+		state.GetRegister(base.SIN0_RANGE).Value = 1
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(math.Sin(state.Sin0State.Angle)*float64(state.Registers[base.SIN0_RANGE].(int)))) {
-			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		if float2Compare(float32(state.ACC.Value),
+			float32(math.Sin(state.Sin0State.Angle)*float64(state.GetRegister(base.SIN0_RANGE).Value))) {
+			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
 		}
 
 		// SIN1
 		op.Args[1].RawValue = 0x1
 		state.Sin1State.Angle = 3.14 / 2.0
-		state.Registers[base.SIN1_RANGE] = int(1)
+		state.GetRegister(base.SIN1_RANGE).Value = 1
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(math.Sin(state.Sin1State.Angle)*float64(state.Registers[base.SIN1_RANGE].(int)))) {
-			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		if float2Compare(float32(state.ACC.Value),
+			float32(math.Sin(state.Sin1State.Angle)*float64(state.GetRegister(base.SIN1_RANGE).Value))) {
+			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
 		}
 
 		// RMP0
 		op.Args[1].RawValue = 0x2
 		state.Ramp0State.Value = 1.23
-		state.Registers[base.RAMP0_RANGE] = int(2)
+		state.GetRegister(base.RAMP0_RANGE).Value = 2
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(state.Ramp0State.Value*float64(state.Registers[base.RAMP0_RANGE].(int)))) {
-			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		if float2Compare(float32(state.ACC.Value),
+			float32(state.Ramp0State.Value*float64(state.GetRegister(base.RAMP0_RANGE).Value))) {
+			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
 		}
 
 		// RMP1
 		op.Args[1].RawValue = 0x3
 		state.Ramp1State.Value = 1.23
-		state.Registers[base.RAMP1_RANGE] = int(2)
+		state.GetRegister(base.RAMP1_RANGE).Value = 2
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(state.Ramp1State.Value*float64(state.Registers[base.RAMP1_RANGE].(int)))) {
-			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		if float2Compare(float32(state.ACC.Value),
+			float32(state.Ramp1State.Value*float64(state.GetRegister(base.RAMP1_RANGE).Value))) {
+			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
 		}
 	})
 
@@ -618,58 +669,62 @@ func Test_LFOOps(t *testing.T) {
 func Test_PseudoOps(t *testing.T) {
 	t.Run("CLR", func(t *testing.T) {
 		state := NewState()
-		state.ACC = 123.0
+		state.ACC.Value = 123
 		op := base.Ops[0x0e]
 		op.Name = "CLR"
 		op.Args[0].RawValue = 0
 
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(0.0)) {
-			t.Errorf("Expected ACC=0,0, got %f\n", state.ACC)
+		if state.ACC.Value != 0 {
+			t.Errorf("Expected ACC=0, got 0x%x\n",
+				state.ACC.Value)
 		}
 	})
 
 	t.Run("NOT", func(t *testing.T) {
 		state := NewState()
-		state.ACC = math.Float32frombits(0xFFFF)
+		state.ACC.Value = 0xFFFF
 		op := base.Ops[0x10]
 		op.Name = "NOT"
-		op.Args[0].RawValue = 0xFFFFFFFF
+		op.Args[1].RawValue = 0xFFFF
 
-		expected := math.Float32frombits(0x10000)
+		expected := int32(0xFFFF &^ 0xFFFF)
 
 		applyOp(op, state)
-		if float2Compare(state.ACC, expected) {
-			t.Errorf("Expected ACC=0x%x, got %f\n", expected, state.ACC)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n",
+				expected, state.ACC.Value)
 		}
 	})
 
 	t.Run("ABSA", func(t *testing.T) {
 		state := NewState()
-		state.ACC = -123.0
+		state.ACC.SetFloat64(-123.0)
 		op := base.Ops[0x09]
 		op.Name = "ABSA"
 
-		expected := 123.0
+		expected := NewRegisterWithFloat64(123.0)
 
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(expected)) {
-			t.Errorf("Expected ACC=0x%x, got %f\n", expected, state.ACC)
+		if !state.ACC.Equal(expected) {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n",
+				expected.Value, state.ACC.Value)
 		}
 	})
 
 	t.Run("LDAX", func(t *testing.T) {
 		state := NewState()
-		state.ACC = -1.0
-		state.Registers[0x20] = 123.0 // REG0
+		state.ACC.Value = -1
+		state.GetRegister(0x20).Value = 123 // REG0
 		op := base.Ops[0x05]
 		op.Name = "LDAX"
 		op.Args[0].RawValue = 0x20
-		expected := 123.0
+		expected := int32(123)
 
 		applyOp(op, state)
-		if float2Compare(state.ACC, float32(expected)) {
-			t.Errorf("Expected ACC=0x%x, got %f\n", expected, state.ACC)
+		if state.ACC.Value != expected {
+			t.Errorf("Expected ACC=0x%x, got 0x%x\n",
+				expected, state.ACC.Value)
 		}
 	})
 

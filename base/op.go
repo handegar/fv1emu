@@ -1,25 +1,5 @@
 package base
 
-// Bitmasks for the lower X bits
-// FIXME: This should be generated @ startup or by the compiler
-// (20220128 handegar)
-var ArgBitMasks = map[int]uint32{
-	32: 0b11111111111111111111111111111111,
-	24: 0b111111111111111111111111,
-	17: 0b11111111111111111,
-	16: 0b1111111111111111,
-	15: 0b111111111111111,
-	14: 0b11111111111111,
-	12: 0b111111111111,
-	11: 0b11111111111,
-	10: 0b1111111111,
-	9:  0b111111111,
-	6:  0b111111,
-	5:  0b11111,
-	2:  0b11,
-	1:  0b1,
-}
-
 var Ops = map[uint32]Op{
 	0x0B: {"LOG",
 		[]OpArg{{11, Real_4_6, 0}, {16, Real_1_14, 0}},
@@ -100,7 +80,6 @@ var Symbols = map[int]string{
 	0x05:       "RMP0_RANGE", // (5)  RMP 0 range
 	0x06:       "RMP1_RATE",  // (6)  RMP 1 rate
 	0x07:       "RMP1_RANGE", // (7)  RMP 1 range
-	0x08:       "COMPA",      // (8) USED with 'CHO' instruction: 1's comp address offset (Generate SIN or COS)
 	0x10:       "POT0",       // (16)  Pot 0 input register
 	0x11:       "POT1",       // (17)  Pot 1 input register
 	0x12:       "POT2",       // (18)  Pot 2 input register
@@ -148,27 +127,45 @@ var Symbols = map[int]string{
 	0x8000000:  "NEG",        // USED with 'SKP' instruction: Skip if ACC is Negative
 }
 
+const (
+	SKP_NEG = 0x1
+	SKP_GEZ = 0x2
+	SKP_ZRO = 0x4
+	SKP_ZRC = 0x8
+	SKP_RUN = 0x10
+)
+
 var SkpFlagSymbols = map[int]string{
-	0b00001: "NEG",
-	0b00010: "GEZ",
-	0b00100: "ZRO",
-	0b01000: "ZRC",
-	0b10000: "RUN",
+	SKP_NEG: "NEG",
+	SKP_GEZ: "GEZ",
+	SKP_ZRO: "ZRO",
+	SKP_ZRC: "ZRC",
+	SKP_RUN: "RUN",
 }
 
+const (
+	CHO_SIN   = 0x0
+	CHO_COS   = 0x1
+	CHO_REG   = 0x2
+	CHO_COMPC = 0x4
+	CHO_COMPA = 0x8
+	CHO_RPTR2 = 0x10
+	CHO_NA    = 0x20
+)
+
 var ChoFlagSymbols = map[int]string{
-	0x0:  "SIN",
-	0x1:  "COS",
-	0x2:  "REG",
-	0x4:  "COMPC",
-	0x8:  "COMPA",
-	0x10: "RPTR2",
-	0x20: "NA",
+	CHO_SIN:   "SIN",
+	CHO_COS:   "COS",
+	CHO_REG:   "REG",
+	CHO_COMPC: "COMPC",
+	CHO_COMPA: "COMPA",
+	CHO_RPTR2: "RPTR2",
+	CHO_NA:    "NA",
 }
 
 // FIXME: Double check that the list is not supposed to be reversed
 // (20220202 handegar)
-var RampAmpValues = map[int]uint32{
+var RampAmpValues = map[int]int32{
 	0: 4096,
 	1: 2048,
 	2: 1024,
@@ -207,55 +204,4 @@ var SymbolEquivalents = map[int][]string{
 		"NA", // (32) USED with 'CHO' instruction: Do NOT add
 		// LFO to address and select cross-fade coefficient
 	},
-}
-
-var Registers = map[int]interface{}{
-	SIN0_RATE:   0,            // SIN0_RATE
-	SIN0_RANGE:  0,            // SIN0_RANGE
-	SIN1_RATE:   0,            // SIN1_RATE
-	SIN1_RANGE:  0,            // SIN1_RANGE
-	RAMP0_RATE:  0,            // RMP0_RATE
-	RAMP0_RANGE: 0,            // RMP0_RANGE
-	RAMP1_RATE:  0,            // RMP1_RATE
-	RAMP1_RANGE: 0,            // RMP1_RANGE
-	0x10:        float32(0.0), // POT0
-	0x11:        float32(0.0), // POT1
-	0x12:        float32(0.0), // POT2
-	ADCL:        float32(0.0), // ADCL
-	ADCR:        float32(0.0), // ADCR
-	DACL:        float32(0.0), // DACL
-	DACR:        float32(0.0), // DACR
-	ADDR_PTR:    int(0),       // ADDR_PTR
-	0x20:        float32(0.0), // REG0
-	0x21:        float32(0.0), // REG1
-	0x22:        float32(0.0), // REG2
-	0x23:        float32(0.0), // REG3
-	0x24:        float32(0.0), // REG4
-	0x25:        float32(0.0), // REG5
-	0x26:        float32(0.0), // REG6
-	0x27:        float32(0.0), // REG7
-	0x28:        float32(0.0), // REG8
-	0x29:        float32(0.0), // REG9
-	0x2a:        float32(0.0), // REG10
-	0x2b:        float32(0.0), // REG11
-	0x2c:        float32(0.0), // REG12
-	0x2d:        float32(0.0), // REG13
-	0x2e:        float32(0.0), // REG14
-	0x2f:        float32(0.0), // REG15
-	0x30:        float32(0.0), // REG16
-	0x31:        float32(0.0), // REG17
-	0x32:        float32(0.0), // REG18
-	0x33:        float32(0.0), // REG19
-	0x34:        float32(0.0), // REG20
-	0x35:        float32(0.0), // REG21
-	0x36:        float32(0.0), // REG22
-	0x37:        float32(0.0), // REG23
-	0x38:        float32(0.0), // REG24
-	0x39:        float32(0.0), // REG25
-	0x3a:        float32(0.0), // REG26
-	0x3b:        float32(0.0), // REG27
-	0x3c:        float32(0.0), // REG28
-	0x3d:        float32(0.0), // REG29
-	0x3e:        float32(0.0), // REG30
-	0x3f:        float32(0.0), // REG31
 }

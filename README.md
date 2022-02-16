@@ -17,3 +17,7 @@ NOTE: This is work in progress and not usable (yet)
 
     $ ./fv1emu --help
     $ ./fv1emu --in INPUT.WAV --out OUTPUT.WAV --bin ALGO.BIN 
+
+## Todos
+
+- Change to "beep" for Wav handling. This will enable streaming as well as doing wav stuff

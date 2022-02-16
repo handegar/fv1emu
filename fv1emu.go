@@ -7,10 +7,10 @@ import (
 	"math"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/eiannone/keyboard"
+	"github.com/fatih/color"
 	wav "github.com/youpy/go-wav"
 
 	"github.com/handegar/fv1emu/base"
@@ -19,6 +19,20 @@ import (
 	"github.com/handegar/fv1emu/reader"
 	"github.com/handegar/fv1emu/settings"
 )
+
+type ChannelStatistics struct {
+	Max     int32
+	Min     int32
+	Mean    int
+	Clipped int
+	Silent  bool
+}
+
+type WavStatistics struct {
+	Left       ChannelStatistics
+	Right      ChannelStatistics
+	NumSamples int
+}
 
 func parseCommandLineParameters() {
 	flag.StringVar(&settings.InFilename, "bin", settings.InFilename, "FV-1 binary file")
@@ -37,6 +51,74 @@ func parseCommandLineParameters() {
 
 	flag.BoolVar(&settings.StepDebug, "debug", settings.StepDebug, "Execute program step by step (oh baby!)")
 	flag.Parse()
+}
+
+func updateWavStatistics(left int32, right int32, statistics *WavStatistics) {
+	statistics.Left.Max = int32(math.Max(float64(statistics.Left.Max), float64(left)))
+	statistics.Left.Min = int32(math.Min(float64(statistics.Left.Min), float64(left)))
+	statistics.Left.Mean += int(left)
+	if math.Abs(float64(left)) > 0.0 {
+		statistics.Left.Silent = false
+	}
+	if math.Abs(float64(left)) > float64(0x7FFF) {
+		statistics.Left.Clipped += 1
+	}
+
+	statistics.Right.Max = int32(math.Max(float64(statistics.Right.Max), float64(right)))
+	statistics.Right.Min = int32(math.Min(float64(statistics.Right.Min), float64(right)))
+	statistics.Right.Mean += int(right)
+	if math.Abs(float64(right)) > 0.0 {
+		statistics.Right.Silent = false
+	}
+	if math.Abs(float64(right)) > float64(0x7FFF) {
+		statistics.Right.Clipped += 1
+	}
+
+	statistics.NumSamples += 1
+}
+
+func printWavStatistics(statistics *WavStatistics) {
+
+	if statistics.Left.Silent {
+		color.Cyan("* NOTE: Left channel is completely silent.")
+	}
+	if statistics.Right.Silent {
+		color.Cyan("* NOTE: Right channel is completely silent.")
+	}
+	if statistics.Left.Clipped > 0 {
+		color.Red("* WARNING: Left channel has %d clipped samples.",
+			statistics.Left.Clipped)
+	}
+	if statistics.Right.Clipped > 0 {
+		color.Red("* WARNING: Right channel has %d clipped samples.",
+			statistics.Right.Clipped)
+	}
+
+	color.Yellow("- Left channel MinMax=<%d, %d>. Mean=%d",
+		statistics.Left.Min, statistics.Left.Max, statistics.Left.Mean)
+	color.Yellow("- Right channel MinMax=<%d, %d>. Mean=%d",
+		statistics.Right.Min, statistics.Right.Max, statistics.Right.Mean)
+
+}
+
+func saveWavFile(wavFormat *wav.WavFormat, outSamples []wav.Sample) error {
+	fmt.Printf("* Writing to '%s'\n", settings.OutputWav)
+	outWAVFile, err := os.Create(settings.OutputWav)
+	if err != nil {
+		fmt.Printf("Error creating output file: %s\n", err)
+		return err
+	}
+	writer := wav.NewWriter(outWAVFile, uint32(len(outSamples)), 2,
+		wavFormat.SampleRate, wavFormat.BitsPerSample)
+	defer outWAVFile.Close()
+
+	err = writer.WriteSamples(outSamples)
+	if err != nil {
+		fmt.Printf("Error writing samples: %s\n", err)
+		return err
+	}
+
+	return nil
 }
 
 func main() {
@@ -76,6 +158,11 @@ func main() {
 	var opCodes = dsp.DecodeOpCodes(buf)
 	_ = opCodes
 
+	if len(opCodes) == 0 {
+		fmt.Println("No input instructions in BIN/HEX file...")
+		return
+	}
+
 	if settings.PrintCode {
 		disasm.PrintCodeListing(opCodes)
 	}
@@ -100,18 +187,20 @@ func main() {
 		return
 	}
 	isStereo := wavFormat.NumChannels == 2
+	settings.SampleRate = float64(wavFormat.SampleRate)
 
 	fmt.Printf("* Reading '%s': %d channels, %dHz, %dbit\n",
 		settings.InputWav, wavFormat.NumChannels, wavFormat.SampleRate, wavFormat.BitsPerSample)
 
-	floatToIntScaler := float64(0x7FFF) / 2.0 //math.Pow(2, float64(wavFormat.BitsPerSample)-1)
-
-	nonZeroSample := false
+	var statistics WavStatistics
+	statistics.Left.Silent = true
+	statistics.Right.Silent = true
 
 	fmt.Println("  Processing...")
-	// FIXME: Do some timing here (20220131 handegar)
+
 	start := time.Now()
-	state := dsp.NewState()
+	var state *dsp.State = dsp.NewState()
+
 	var outSamples []wav.Sample
 	for {
 		samples, err := reader.ReadSamples()
@@ -126,18 +215,19 @@ func main() {
 				right = reader.FloatValue(sample, 1)
 			}
 
-			state.Registers[base.ADCL] = left
-			state.Registers[base.ADCR] = right
-
+			state.GetRegister(base.ADCL).SetFloat64(left)
+			state.GetRegister(base.ADCR).SetFloat64(right)
 			dsp.ProcessSample(opCodes, state)
 
-			outLeft := state.Registers[base.DACL].(float64) * floatToIntScaler
-			outRight := state.Registers[base.DACR].(float64) * floatToIntScaler
+			// FIXME: Invesigate why multiplying with 2^13
+			// is the correct scaling rather than 2^15
+			// which sounds like the logical step to scale
+			// a float up to 16bit ints.(20220213
+			// handegar)
+			outLeft := int32(state.GetRegister(base.DACL).ToFloat64() * (1 << 15))
+			outRight := int32(state.GetRegister(base.DACR).ToFloat64() * (1 << 15))
 
-			if outLeft > 2*math.SmallestNonzeroFloat64 ||
-				outRight > 2*math.SmallestNonzeroFloat64 {
-				nonZeroSample = true
-			}
+			updateWavStatistics(outLeft, outRight, &statistics)
 
 			outSamples = append(outSamples,
 				wav.Sample{[2]int{int(outLeft), int(outRight)}})
@@ -146,28 +236,14 @@ func main() {
 	duration := time.Since(start)
 	fmt.Printf("   -> ..took %s\n", duration)
 
-	if !nonZeroSample {
-		fmt.Println("* NOTE: All samples were zero, ie. no sound was produced")
-	}
+	statistics.Left.Mean = statistics.Left.Mean / int(statistics.NumSamples)
+	statistics.Right.Mean = statistics.Right.Mean / int(statistics.NumSamples)
+
+	printWavStatistics(&statistics)
 
 	if settings.StepDebug {
 		return
 	}
 
-	fmt.Printf("* Writing to '%s'\n", settings.OutputWav)
-	outWAVFile, err := os.Create(settings.OutputWav)
-	if err != nil {
-		fmt.Printf("Error creating output file: %s\n", err)
-		syscall.Exit(-1)
-	}
-	writer := wav.NewWriter(outWAVFile, uint32(len(outSamples)), 2,
-		wavFormat.SampleRate, wavFormat.BitsPerSample)
-	defer outWAVFile.Close()
-
-	err = writer.WriteSamples(outSamples)
-	if err != nil {
-		fmt.Printf("Error writing samples: %s\n", err)
-		syscall.Exit(-1)
-	}
-
+	saveWavFile(wavFormat, outSamples)
 }
