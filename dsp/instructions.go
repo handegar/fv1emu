@@ -8,41 +8,32 @@ import (
 
 var opTable = map[string]interface{}{
 	"LOG": func(op base.Op, state *State) {
-		//C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
 		// NOTE: According to the SPIN datasheet the second
 		// parameter for LOG is supposed to be a S4.6 number,
 		// but the ASFY1 assembler, the DISFY1 disassembler,
 		// SpinCAD and Igor's Dissasembler2 interpret this as
 		// a S.10 float. The SpinCAD source even has a comment
-		// which says "SpinASM compatibility", so I assume the
-		// data-sheet is wrong.
-		// FIXME: Test agains the official SpinASM
-		// assembler. (20220205 handegar)
-		//D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
-		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
+		// which says "SpinASM compatibility", Both seems to work, though.
+		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 4, 6) // D
 
 		// C*LOG(|ACC|) + D
 		acc := state.ACC.Abs().ToFloat64()
 		state.workRegA.SetFloat64(math.Log10(acc) / math.Log10(2.0) / 16.0)
+		state.workRegA.Mult(state.workReg1_14)
 		state.workRegA.Add(state.workReg0_10)
 		state.ACC.Copy(state.workRegA)
 	},
 	"EXP": func(op base.Op, state *State) {
-		//C := float64(utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14))
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
-		//D := float64(utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
 		// C*exp(ACC) + D
 		acc := state.ACC.ToFloat64()
-		state.workRegA.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
-		state.ACC.Copy(state.workRegA)
+		state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
 	},
 	"SOF": func(op base.Op, state *State) {
-		//C := op.Args[1].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
-		//D := op.Args[0].RawValue // S.10
 		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
 		// C * ACC + D
@@ -92,7 +83,6 @@ var opTable = map[string]interface{}{
 	},
 	"RDA": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		//C := op.Args[1].RawValue // S1.9
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
 		delayValue := state.DelayRAM[idx]
@@ -103,7 +93,6 @@ var opTable = map[string]interface{}{
 		state.ACC.Add(state.workRegA)
 	},
 	"RMPA": func(op base.Op, state *State) {
-		//C := op.Args[1].RawValue                          // S1.9
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 		addr := state.Registers[base.ADDR_PTR].Value >> 8               // ADDR_PTR
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
@@ -116,29 +105,25 @@ var opTable = map[string]interface{}{
 	},
 	"WRA": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		//C := op.Args[1].RawValue // S1.9
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 
 		// ACC->SRAM[ADDR], ACC * C
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
-		// FIXME: Rescale from S7.24 to S0.23. Is this correct? (20220212 handegar)
-		state.DelayRAM[idx] = (state.ACC.Value >> 1) & 0x00FF_FFFF
+		state.DelayRAM[idx] = state.ACC.ToQFormat(0, 23)
 		state.ACC.Mult(state.workReg1_9)
 	},
 	"WRAP": func(op base.Op, state *State) {
 		addr := op.Args[0].RawValue
-		//C := op.Args[1].RawValue                                        // S1.9
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 
 		// ACC->SRAM[ADDR], (ACC*C) + LR
 		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
 		// FIXME: Rescale from S7.24 to S0.23. Is this correct? (20220212 handegar)
-		state.DelayRAM[idx] = (state.ACC.Value >> 1) & 0x00FF_FFFF
+		state.DelayRAM[idx] = state.ACC.ToQFormat(0, 23)
 		state.ACC.Mult(state.workReg1_9).Add(state.LR)
 	},
 	"RDAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		//C := op.Args[2].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 		reg := state.GetRegister(regNo)
 
@@ -148,7 +133,6 @@ var opTable = map[string]interface{}{
 	},
 	"WRAX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		//C := op.Args[2].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], C * ACC
@@ -157,7 +141,6 @@ var opTable = map[string]interface{}{
 	},
 	"MAXX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		//C := op.Args[2].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// MAX(|REG[ADDR] * C|, |ACC| )
@@ -180,7 +163,6 @@ var opTable = map[string]interface{}{
 	},
 	"RDFX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		//C := op.Args[2].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 		reg := state.GetRegister(regNo)
 
@@ -196,7 +178,6 @@ var opTable = map[string]interface{}{
 	},
 	"WRLX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		//C := op.Args[2].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], (PACC-ACC)*C + PACC
@@ -206,7 +187,6 @@ var opTable = map[string]interface{}{
 	},
 	"WRHX": func(op base.Op, state *State) {
 		regNo := int(op.Args[0].RawValue)
-		//C := op.Args[2].RawValue // S1.14
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], (ACC*C)+PACC
