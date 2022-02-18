@@ -11,9 +11,6 @@ var PrintDebug = false
 
 var ProgramNo = 0
 
-// Print some collected stats (num opcodes etc.)
-var PrintStats = false
-
 // Do a code printout
 var PrintCode = true
 
@@ -30,3 +27,9 @@ var StepDebug = false
 
 // Current samplerate
 var SampleRate = 44100.0
+
+// Std. clock speed
+var ClockFrequency = 32768.0
+
+// Trail samples
+var TrailSeconds = 0.0

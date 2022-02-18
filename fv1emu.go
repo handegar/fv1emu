@@ -40,16 +40,17 @@ func parseCommandLineParameters() {
 	flag.StringVar(&settings.InputWav, "in", settings.InputWav, "Input wav-file")
 	flag.StringVar(&settings.OutputWav, "out", settings.OutputWav, "Output wav-file")
 
-	flag.IntVar(&settings.ProgramNo, "n", settings.ProgramNo, "Program number")
+	flag.Float64Var(&settings.ClockFrequency, "clock", settings.ClockFrequency, "Chrystal frequency")
+	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds, "Additional trail length (seconds)")
+
 	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value, "Potetiometer 0 value (0 .. 1.0)")
 	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value, "Potetiometer 1 value (0 .. 1.0)")
 	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value, "Potetiometer 2 value (0 .. 1.0)")
 
-	flag.BoolVar(&settings.PrintStats, "print-stats", settings.PrintStats, "Print program stats")
 	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode, "Print program code")
-	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug, "Print debug info with program code")
 
-	flag.BoolVar(&settings.StepDebug, "debug", settings.StepDebug, "Execute program step by step (oh baby!)")
+	flag.BoolVar(&settings.StepDebug, "debug", settings.StepDebug, "Enter debug mode")
+	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug, "Print additional info when debugging")
 	flag.Parse()
 }
 
@@ -191,6 +192,7 @@ func main() {
 
 	fmt.Printf("* Reading '%s': %d channels, %dHz, %dbit\n",
 		settings.InputWav, wavFormat.NumChannels, wavFormat.SampleRate, wavFormat.BitsPerSample)
+	fmt.Printf("* Chrystal frequency: %.2f Hz\n", settings.ClockFrequency)
 
 	var statistics WavStatistics
 	statistics.Left.Silent = true
@@ -214,25 +216,22 @@ func main() {
 			if isStereo {
 				right = reader.FloatValue(sample, 1)
 			}
-
-			state.GetRegister(base.ADCL).SetFloat64(left)
-			state.GetRegister(base.ADCR).SetFloat64(right)
-			dsp.ProcessSample(opCodes, state)
-
-			// FIXME: Invesigate why multiplying with 2^13
-			// is the correct scaling rather than 2^15
-			// which sounds like the logical step to scale
-			// a float up to 16bit ints.(20220213
-			// handegar)
-			outLeft := int32(state.GetRegister(base.DACL).ToFloat64() * (1 << 15))
-			outRight := int32(state.GetRegister(base.DACR).ToFloat64() * (1 << 15))
-
+			outLeft, outRight := processSample(left, right, state, opCodes)
 			updateWavStatistics(outLeft, outRight, &statistics)
-
 			outSamples = append(outSamples,
 				wav.Sample{[2]int{int(outLeft), int(outRight)}})
 		}
 	}
+
+	// Do trail-samples?
+	numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
+	for i := 0; i < numTrailSamples; i++ {
+		outLeft, outRight := processSample(0.0, 0.0, state, opCodes)
+		updateWavStatistics(outLeft, outRight, &statistics)
+		outSamples = append(outSamples,
+			wav.Sample{[2]int{int(outLeft), int(outRight)}})
+	}
+
 	duration := time.Since(start)
 	fmt.Printf("   -> ..took %s\n", duration)
 
@@ -246,4 +245,14 @@ func main() {
 	}
 
 	saveWavFile(wavFormat, outSamples)
+}
+
+// Returns an Int-pair (16bits signed)
+func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op) (int32, int32) {
+	state.GetRegister(base.ADCL).SetFloat64(inLeft)
+	state.GetRegister(base.ADCR).SetFloat64(inRight)
+	dsp.ProcessSample(opCodes, state)
+	outLeft := int32(state.GetRegister(base.DACL).ToFloat64() * (1 << 15))
+	outRight := int32(state.GetRegister(base.DACR).ToFloat64() * (1 << 15))
+	return outLeft, outRight
 }

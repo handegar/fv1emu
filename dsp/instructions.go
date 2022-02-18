@@ -238,34 +238,32 @@ var opTable = map[string]interface{}{
 			typ += 2 // Make SIN -> COS
 		}
 
-		lfoVal := GetLFOValue(typ, state)
-		var mod int32 = 1
-		_ = mod
+		lfoVal := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
+
+		mod := 1.0
 
 		if (flags&base.CHO_COMPA) != 0 && (typ == 0 || typ == 1) {
 			lfoVal = -lfoVal
 		}
 
-		if (flags & base.CHO_REG) != 0 {
-			// FIXME: What function does REG have? (20220206 handegar)
-		}
 		if (flags & base.CHO_RPTR2) != 0 {
 			// FIXME: Implement (20220206 handegar)
 		}
 
 		if (flags & base.CHO_COMPC) != 0 {
-			//lfoVal = GetLFOMaximum(typ, state) - lfoVal
-			//max := GetLFOMaximum(typ, state)
-			//mod = (max - lfoVal) / max
+			lfoVal = GetLFOMaximum(typ, state) - lfoVal
+			max := GetLFOMaximum(typ, state)
+			mod = (max - lfoVal) / max
 		}
 
 		if (flags & 0x20) != 0 { // NA
 			// FIXME: Handle the NA flag here (20220207 handegar)
 		}
 
-		idx := capDelayRAMIndex(addr + state.DelayRAMPtr + int(lfoVal))
-		_ = idx
-		//state.ACC.SetValue(state.DelayRAM[idx]).Mult24Value(mod)
+		idx := capDelayRAMIndex(addr + state.DelayRAMPtr + int(lfoVal*32767.0))
+		state.workReg0_23.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+		state.workRegA.SetFloat64(mod)
+		state.ACC.Copy(state.workReg0_23).Mult(state.workRegA)
 	},
 	"CHO SOF": func(op base.Op, state *State) {
 		/*
@@ -280,8 +278,8 @@ var opTable = map[string]interface{}{
 		*/
 	},
 	"CHO RDAL": func(op base.Op, state *State) {
-		//typ := int(op.Args[1].RawValue)
-		//state.ACC.SetValue(int32(GetLFOValue(typ, state)))
+		typ := int(op.Args[1].RawValue)
+		state.ACC.SetFloat64(GetLFOValue(typ, state, false))
 	},
 }
 

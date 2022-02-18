@@ -18,6 +18,12 @@ NOTE: This is work in progress and not usable (yet)
     $ ./fv1emu --help
     $ ./fv1emu --in INPUT.WAV --out OUTPUT.WAV --bin ALGO.BIN 
 
+## Debugger
+
+    It is possible to step-debug a FV-1 program by adding the '-debug' paramenter.
+    One can then inspect the internal state and registers of the system for each operation.
+
+
 ## Todos
 
 - Change to "beep" for Wav handling. This will enable streaming as well as doing wav stuff

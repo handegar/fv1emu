@@ -23,6 +23,8 @@ type State struct {
 	Sin1State  SINLFOState
 	Ramp0State RAMPState
 	Ramp1State RAMPState
+	sinLFOReg  *Register // Holds the frozen sine LFO value
+	rampLFOReg *Register // Holds the frozen ramp LFO value
 
 	Registers RegisterBank
 
@@ -60,6 +62,9 @@ func (s *State) Reset() {
 	s.ACC = NewRegister(0)
 	s.PACC = NewRegister(0)
 	s.LR = NewRegister(0)
+
+	s.sinLFOReg = NewRegister(0)
+	s.rampLFOReg = NewRegister(0)
 
 	s.workRegA = NewRegister(0)
 	s.workRegB = NewRegister(0)
@@ -175,9 +180,11 @@ REG24-31: [%f, %f, %f, %f, %f, %f, %f, %f]
 		s.Registers[0x3c].ToFloat64(), s.Registers[0x3d].ToFloat64(),
 		s.Registers[0x3e].ToFloat64(), s.Registers[0x3f].ToFloat64(),
 	)
-	color.Cyan("SIN0 Rate/range=[%d, %d], SIN1 Rate/range=[%d, %d]\n",
-		s.Registers[base.SIN0_RATE].Value, s.Registers[base.SIN0_RANGE].Value,
-		s.Registers[base.SIN1_RATE].Value, s.Registers[base.SIN1_RANGE].Value)
+	color.Cyan("SIN0 Rate/range=[%d(%f), %d(%f)]\nSIN1 Rate/range=[%d(%f), %d(%f)]\n",
+		s.Registers[base.SIN0_RATE].Value, s.Registers[base.SIN0_RATE].ToFloat64(),
+		s.Registers[base.SIN0_RANGE].Value, s.Registers[base.SIN0_RANGE].ToFloat64(),
+		s.Registers[base.SIN1_RATE].Value, s.Registers[base.SIN1_RATE].ToFloat64(),
+		s.Registers[base.SIN1_RANGE].Value, s.Registers[base.SIN1_RANGE].ToFloat64())
 	color.White("SIN0 Angle=%f, SIN1 Angle=%f\n", s.Sin0State.Angle, s.Sin1State.Angle)
 	color.Cyan("RAMP0 Rate/range=[%d, %d], RAMP1 Rate/range=[%d, %d]\n",
 		s.Registers[base.RAMP0_RATE].Value, s.Registers[base.RAMP0_RANGE].Value,
