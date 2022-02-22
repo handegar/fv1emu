@@ -3,7 +3,6 @@ package dsp
 import (
 	"fmt"
 
-	"github.com/fatih/color"
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
 )
@@ -143,53 +142,6 @@ func NewState() *State {
 	s := new(State)
 	s.Reset()
 	return s
-}
-
-func (s *State) Print() {
-	color.Blue("IP=%d, ACC=%d, ADDR_PTR=%d, DelayRAMPtr=%d, RUN_FLAG=%t",
-		s.IP, s.ACC.Value,
-		s.Registers[base.ADDR_PTR].Value, s.DelayRAMPtr,
-		s.RUN_FLAG)
-	color.Cyan("ADCL=%d, ADCR=%d, DACL=%d, DACR=%d\n",
-		s.Registers[base.ADCL].Value, s.Registers[base.ADCR].Value,
-		s.Registers[base.DACL].Value, s.Registers[base.DACR].Value)
-	color.Cyan("POT0=%f, POT1=%f, POT2=%f\n",
-		s.Registers[base.POT0].ToFloat64(),
-		s.Registers[base.POT1].ToFloat64(),
-		s.Registers[base.POT2].ToFloat64())
-
-	fmt.Printf(`REG0-7:   [%f, %f, %f, %f, %f, %f, %f, %f]
-REG8-15:  [%f, %f, %f, %f, %f, %f, %f, %f]
-REG16-23: [%f, %f, %f, %f, %f, %f, %f, %f]
-REG24-31: [%f, %f, %f, %f, %f, %f, %f, %f]
-`,
-		s.Registers[0x20].ToFloat64(), s.Registers[0x21].ToFloat64(),
-		s.Registers[0x22].ToFloat64(), s.Registers[0x23].ToFloat64(),
-		s.Registers[0x24].ToFloat64(), s.Registers[0x25].ToFloat64(),
-		s.Registers[0x26].ToFloat64(), s.Registers[0x27].ToFloat64(),
-		s.Registers[0x28].ToFloat64(), s.Registers[0x29].ToFloat64(),
-		s.Registers[0x2a].ToFloat64(), s.Registers[0x2b].ToFloat64(),
-		s.Registers[0x2c].ToFloat64(), s.Registers[0x2d].ToFloat64(),
-		s.Registers[0x2e].ToFloat64(), s.Registers[0x2f].ToFloat64(),
-		s.Registers[0x30].ToFloat64(), s.Registers[0x31].ToFloat64(),
-		s.Registers[0x32].ToFloat64(), s.Registers[0x33].ToFloat64(),
-		s.Registers[0x34].ToFloat64(), s.Registers[0x35].ToFloat64(),
-		s.Registers[0x36].ToFloat64(), s.Registers[0x37].ToFloat64(),
-		s.Registers[0x38].ToFloat64(), s.Registers[0x39].ToFloat64(),
-		s.Registers[0x3a].ToFloat64(), s.Registers[0x3b].ToFloat64(),
-		s.Registers[0x3c].ToFloat64(), s.Registers[0x3d].ToFloat64(),
-		s.Registers[0x3e].ToFloat64(), s.Registers[0x3f].ToFloat64(),
-	)
-	color.Cyan("SIN0 Rate/range=[%d(%f), %d(%f)]\nSIN1 Rate/range=[%d(%f), %d(%f)]\n",
-		s.Registers[base.SIN0_RATE].Value, s.Registers[base.SIN0_RATE].ToFloat64(),
-		s.Registers[base.SIN0_RANGE].Value, s.Registers[base.SIN0_RANGE].ToFloat64(),
-		s.Registers[base.SIN1_RATE].Value, s.Registers[base.SIN1_RATE].ToFloat64(),
-		s.Registers[base.SIN1_RANGE].Value, s.Registers[base.SIN1_RANGE].ToFloat64())
-	color.White("SIN0 Angle=%f, SIN1 Angle=%f\n", s.Sin0State.Angle, s.Sin1State.Angle)
-	color.Cyan("RAMP0 Rate/range=[%d, %d], RAMP1 Rate/range=[%d, %d]\n",
-		s.Registers[base.RAMP0_RATE].Value, s.Registers[base.RAMP0_RANGE].Value,
-		s.Registers[base.RAMP1_RATE].Value, s.Registers[base.RAMP1_RANGE].Value)
-	color.White("RAMP0 Value=%f, RAMP1 Value=%f\n", s.Ramp0State.Value, s.Ramp1State.Value)
 }
 
 func validateRegisterNo(regNo int) error {

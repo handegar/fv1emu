@@ -128,7 +128,13 @@ var opTable = map[string]interface{}{
 		reg := state.GetRegister(regNo)
 
 		// (C * REG) + ACC
-		state.workRegA.Copy(reg).Mult(state.workReg1_14)
+		if regNo >= base.SIN0_RATE && regNo <= base.RAMP1_RANGE {
+			f := float64(reg.ToInt32())
+			v := f * state.workReg1_14.ToFloat64()
+			state.workRegA.SetFloat64(v)
+		} else {
+			state.workRegA.Copy(reg).Mult(state.workReg1_14)
+		}
 		state.ACC.Add(state.workRegA)
 	},
 	"WRAX": func(op base.Op, state *State) {
@@ -201,11 +207,11 @@ var opTable = map[string]interface{}{
 		if op.Args[2].RawValue == 0 { // SIN0
 			state.GetRegister(base.SIN0_RATE).SetInt32(freq)
 			state.GetRegister(base.SIN0_RANGE).SetInt32(amp)
-			state.Sin0State.Angle = 0
+			state.Sin0State.Angle = 0.0
 		} else { // SIN1
 			state.GetRegister(base.SIN1_RATE).SetInt32(freq)
 			state.GetRegister(base.SIN1_RANGE).SetInt32(amp)
-			state.Sin1State.Angle = 0
+			state.Sin1State.Angle = 0.0
 		}
 	},
 	"WLDR": func(op base.Op, state *State) {
@@ -238,32 +244,33 @@ var opTable = map[string]interface{}{
 			typ += 2 // Make SIN -> COS
 		}
 
-		lfoVal := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
-
-		mod := 1.0
+		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
+		scaledLFO := ScaleLFOValue(lfo, typ, state)
 
 		if (flags&base.CHO_COMPA) != 0 && (typ == 0 || typ == 1) {
-			lfoVal = -lfoVal
+			lfo = -lfo
 		}
 
 		if (flags & base.CHO_RPTR2) != 0 {
 			// FIXME: Implement (20220206 handegar)
 		}
 
+		delayIndex := addr + int(scaledLFO)
+		idx := capDelayRAMIndex(state.DelayRAMPtr + delayIndex)
+		state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+
+		interpolate := (lfo + 1.0) / 2.0 // get 0...1.0
 		if (flags & base.CHO_COMPC) != 0 {
-			lfoVal = GetLFOMaximum(typ, state) - lfoVal
-			max := GetLFOMaximum(typ, state)
-			mod = (max - lfoVal) / max
+			state.workRegB.SetFloat64(1.0 - interpolate)
+		} else {
+			state.workRegB.SetFloat64(interpolate)
 		}
+		state.workRegA.Mult(state.workRegB)
+		state.ACC.Add(state.workRegA)
 
 		if (flags & 0x20) != 0 { // NA
 			// FIXME: Handle the NA flag here (20220207 handegar)
 		}
-
-		idx := capDelayRAMIndex(addr + state.DelayRAMPtr + int(lfoVal*32767.0))
-		state.workReg0_23.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
-		state.workRegA.SetFloat64(mod)
-		state.ACC.Copy(state.workReg0_23).Mult(state.workRegA)
 	},
 	"CHO SOF": func(op base.Op, state *State) {
 		/*
@@ -279,7 +286,9 @@ var opTable = map[string]interface{}{
 	},
 	"CHO RDAL": func(op base.Op, state *State) {
 		typ := int(op.Args[1].RawValue)
-		state.ACC.SetFloat64(GetLFOValue(typ, state, false))
+		lfo := GetLFOValue(typ, state, false)
+		lfoScaled := ScaleLFOValue(lfo, typ, state)
+		state.ACC.SetFloat64(lfoScaled)
 	},
 }
 

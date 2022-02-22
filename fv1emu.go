@@ -4,14 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/eiannone/keyboard"
 	"github.com/fatih/color"
 	wav "github.com/youpy/go-wav"
+
+	ui "github.com/gizak/termui/v3"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/disasm"
@@ -49,7 +51,7 @@ func parseCommandLineParameters() {
 
 	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode, "Print program code")
 
-	flag.BoolVar(&settings.StepDebug, "debug", settings.StepDebug, "Enter debug mode")
+	flag.BoolVar(&settings.Debugger, "debug", settings.Debugger, "Enable step-debugger user-interface")
 	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug, "Print additional info when debugging")
 	flag.Parse()
 }
@@ -79,7 +81,6 @@ func updateWavStatistics(left int32, right int32, statistics *WavStatistics) {
 }
 
 func printWavStatistics(statistics *WavStatistics) {
-
 	if statistics.Left.Silent {
 		color.Cyan("* NOTE: Left channel is completely silent.")
 	}
@@ -99,7 +100,6 @@ func printWavStatistics(statistics *WavStatistics) {
 		statistics.Left.Min, statistics.Left.Max, statistics.Left.Mean)
 	color.Yellow("- Right channel MinMax=<%d, %d>. Mean=%d",
 		statistics.Right.Min, statistics.Right.Max, statistics.Right.Mean)
-
 }
 
 func saveWavFile(wavFormat *wav.WavFormat, outSamples []wav.Sample) error {
@@ -126,13 +126,12 @@ func main() {
 	fmt.Printf("* FV-1 emulator v%s\n", settings.Version)
 	parseCommandLineParameters()
 
-	if settings.StepDebug {
-		if err := keyboard.Open(); err != nil {
-			panic(err)
+	if settings.Debugger {
+		// Setting up TermUI
+		if err := ui.Init(); err != nil {
+			log.Fatalf("failed to initialize termui: %v", err)
 		}
-		defer func() {
-			_ = keyboard.Close()
-		}()
+		defer ui.Close()
 	}
 
 	if settings.InFilename == "" {
@@ -216,17 +215,25 @@ func main() {
 			if isStereo {
 				right = reader.FloatValue(sample, 1)
 			}
-			outLeft, outRight := processSample(left, right, state, opCodes)
+			outLeft, outRight, cont := processSample(left, right, state, opCodes)
 			updateWavStatistics(outLeft, outRight, &statistics)
 			outSamples = append(outSamples,
 				wav.Sample{[2]int{int(outLeft), int(outRight)}})
+
+			if !cont {
+				return
+			}
 		}
+	}
+
+	if settings.Debugger {
+		return
 	}
 
 	// Do trail-samples?
 	numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
 	for i := 0; i < numTrailSamples; i++ {
-		outLeft, outRight := processSample(0.0, 0.0, state, opCodes)
+		outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes)
 		updateWavStatistics(outLeft, outRight, &statistics)
 		outSamples = append(outSamples,
 			wav.Sample{[2]int{int(outLeft), int(outRight)}})
@@ -239,20 +246,15 @@ func main() {
 	statistics.Right.Mean = statistics.Right.Mean / int(statistics.NumSamples)
 
 	printWavStatistics(&statistics)
-
-	if settings.StepDebug {
-		return
-	}
-
 	saveWavFile(wavFormat, outSamples)
 }
 
 // Returns an Int-pair (16bits signed)
-func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op) (int32, int32) {
+func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op) (int32, int32, bool) {
 	state.GetRegister(base.ADCL).SetFloat64(inLeft)
 	state.GetRegister(base.ADCR).SetFloat64(inRight)
-	dsp.ProcessSample(opCodes, state)
+	cont := dsp.ProcessSample(opCodes, state)
 	outLeft := int32(state.GetRegister(base.DACL).ToFloat64() * (1 << 15))
 	outRight := int32(state.GetRegister(base.DACR).ToFloat64() * (1 << 15))
-	return outLeft, outRight
+	return outLeft, outRight, cont
 }

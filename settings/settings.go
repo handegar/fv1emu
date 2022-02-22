@@ -9,8 +9,6 @@ var InFilename = ""
 // Print extra debug info when disassembling
 var PrintDebug = false
 
-var ProgramNo = 0
-
 // Do a code printout
 var PrintCode = true
 
@@ -23,7 +21,7 @@ var Pot1Value = 0.5
 var Pot2Value = 0.5
 
 // Step debugger
-var StepDebug = false
+var Debugger = false
 
 // Current samplerate
 var SampleRate = 44100.0

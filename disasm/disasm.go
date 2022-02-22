@@ -13,7 +13,7 @@ func PrintCodeListing(opCodes []base.Op) {
 	fmt.Printf("\n;;\n;; Dissassembly (%d opcodes)\n;;\n", len(opCodes))
 	var skpTargets []int
 	for pos, opCode := range opCodes {
-		op := OpCodeToString(opCode)
+		op := OpCodeToString(opCode, true)
 		if opCode.Name == "SKP" {
 			skpTargets = append(skpTargets, pos+int(opCode.Args[1].RawValue))
 		}
@@ -36,7 +36,7 @@ func PrintCodeListing(opCodes []base.Op) {
 	fmt.Println()
 }
 
-func OpCodeToString(opcode base.Op) string {
+func OpCodeToString(opcode base.Op, showParamData bool) string {
 	ret := "  "
 
 	switch opcode.Name {
@@ -102,25 +102,28 @@ func OpCodeToString(opcode base.Op) string {
 		ret += fmt.Sprintf("<%s 0b%b>", opcode.Name, opcode.RawValue)
 	}
 
-	diff := 25 - len(ret)
-	if diff > 1 {
-		for i := 0; i < diff; i++ {
-			ret += " "
+	if showParamData {
+		diff := 25 - len(ret)
+		if diff > 1 {
+			for i := 0; i < diff; i++ {
+				ret += " "
+			}
 		}
-	}
 
-	ret += "\t;;"
-	if settings.PrintDebug {
-		ret += fmt.Sprintf(" [0b%32b] ", opcode.RawValue)
-	}
-	for i, v := range opcode.Args {
-		binStr := ""
+		ret += "\t;;"
 		if settings.PrintDebug {
-			binStr = fmt.Sprintf("0b%b/", v.RawValue)
+			ret += fmt.Sprintf(" [0b%32b] ", opcode.RawValue)
 		}
-		ret += fmt.Sprintf("#%d: %s0x%x (%dbit), ", i, binStr, v.RawValue, v.Len)
+		for i, v := range opcode.Args {
+			binStr := ""
+			if settings.PrintDebug {
+				binStr = fmt.Sprintf("0b%b/", v.RawValue)
+			}
+			ret += fmt.Sprintf("#%d: %s0x%x (%dbit), ", i, binStr, v.RawValue, v.Len)
+		}
+
+		ret += "\n"
 	}
-	ret += "\n"
 
 	return ret
 }
