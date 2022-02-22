@@ -15,10 +15,14 @@ var opTable = map[string]interface{}{
 		// SpinCAD and Igor's Dissasembler2 interpret this as
 		// a S.10 float. The SpinCAD source even has a comment
 		// which says "SpinASM compatibility", Both seems to work, though.
-		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 4, 6) // D
+		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) //4, 6) // D
 
 		// C*LOG(|ACC|) + D
 		acc := state.ACC.Abs().ToFloat64()
+		if acc <= 0.0 {
+			acc = 1.0 / (1 << 23)
+		}
+
 		state.workRegA.SetFloat64(math.Log10(acc) / math.Log10(2.0) / 16.0)
 		state.workRegA.Mult(state.workReg1_14)
 		state.workRegA.Add(state.workReg0_10)
@@ -30,7 +34,13 @@ var opTable = map[string]interface{}{
 
 		// C*exp(ACC) + D
 		acc := state.ACC.ToFloat64()
-		state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
+		if acc >= 0.0 {
+			state.ACC.SetFloat64(0.9999998807907104).Mult(state.workReg1_14).Add(state.workReg0_10)
+		} else {
+			acc = acc * 16.0
+			state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
+		}
+
 	},
 	"SOF": func(op base.Op, state *State) {
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
@@ -128,13 +138,7 @@ var opTable = map[string]interface{}{
 		reg := state.GetRegister(regNo)
 
 		// (C * REG) + ACC
-		if regNo >= base.SIN0_RATE && regNo <= base.RAMP1_RANGE {
-			f := float64(reg.ToInt32())
-			v := f * state.workReg1_14.ToFloat64()
-			state.workRegA.SetFloat64(v)
-		} else {
-			state.workRegA.Copy(reg).Mult(state.workReg1_14)
-		}
+		state.workRegA.Copy(reg).Mult(state.workReg1_14)
 		state.ACC.Add(state.workRegA)
 	},
 	"WRAX": func(op base.Op, state *State) {
@@ -201,7 +205,7 @@ var opTable = map[string]interface{}{
 		state.ACC.Copy(state.workRegA)
 	},
 	"WLDS": func(op base.Op, state *State) {
-		freq := op.Args[1].RawValue
+		freq := op.Args[1].RawValue // Really "1/freq"
 		amp := op.Args[0].RawValue
 
 		if op.Args[2].RawValue == 0 { // SIN0
@@ -245,11 +249,10 @@ var opTable = map[string]interface{}{
 		}
 
 		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
-		scaledLFO := ScaleLFOValue(lfo, typ, state)
-
 		if (flags&base.CHO_COMPA) != 0 && (typ == 0 || typ == 1) {
 			lfo = -lfo
 		}
+		scaledLFO := ScaleLFOValue(lfo, typ, state)
 
 		if (flags & base.CHO_RPTR2) != 0 {
 			// FIXME: Implement (20220206 handegar)
@@ -273,16 +276,23 @@ var opTable = map[string]interface{}{
 		}
 	},
 	"CHO SOF": func(op base.Op, state *State) {
-		/*
-			D := int(op.Args[0].RawValue)
-			typ := int(op.Args[1].RawValue)
-			flags := int(op.Args[3].RawValue)
-			// FIXME: Implement support for the flags here. (20220131 handegar)
-			_ = flags
+		addr := int(op.Args[0].RawValue)
+		typ := int(op.Args[1].RawValue)
+		flags := int(op.Args[3].RawValue)
 
-			lfo := GetLFOValue(typ, state)
-			//state.ACC.Mult24Value(int32(lfo * float64(D)))
-		*/
+		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
+
+		interpolate := (lfo / 2.0) + 0.5 // get 0...1.0
+		f := interpolate
+		if (flags & base.CHO_COMPC) != 0 {
+			f = 1.0 - interpolate
+		}
+		state.workRegB.SetFloat64(interpolate)
+		lfoScaled := ScaleLFOValue(f, typ, state)
+		state.workRegA.SetFloat64(lfoScaled)
+
+		state.workRegB.SetWithIntsAndFracs(int32(addr), 0, 15)
+		state.ACC.Mult(state.workRegA).Add(state.workRegB)
 	},
 	"CHO RDAL": func(op base.Op, state *State) {
 		typ := int(op.Args[1].RawValue)

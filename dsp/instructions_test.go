@@ -102,11 +102,24 @@ func Test_AccumulatorOps(t *testing.T) {
 		c := NewRegisterWithFloat64(0.5)
 		d := NewRegisterWithFloat64(0.8)
 
-		op.Args[0].RawValue = d.ToQFormat(4, 6)
+		op.Args[0].RawValue = d.ToQFormat(0, 10)
 		op.Args[1].RawValue = c.ToQFormat(1, 14)
 
 		expectedF := 0.5*(math.Log10(0.3)/math.Log10(2.0)/16.0) + 0.8
 		expected := NewRegisterWithFloat64(expectedF)
+
+		applyOp(op, state)
+		// We need a much larger epsilon here as the LOG operation has such a low precision.
+		// FIXME: Double check this (20220201 handegar)
+		if !state.ACC.EqualWithEpsilon(expected, 10) {
+			t.Errorf("C * LOG(|ACC|) + D != %f. Got %f",
+				expected.ToFloat64(), state.ACC.ToFloat64())
+		}
+
+		// Special case when |ACC|==0.0
+		state.ACC.SetFloat64(0.0)
+		expectedF = 0.5*(math.Log10(1.0/(1<<23))/math.Log10(2.0)/16.0) + 0.8
+		expected = NewRegisterWithFloat64(expectedF)
 
 		applyOp(op, state)
 		// We need a much larger epsilon here as the LOG operation has such a low precision.
@@ -125,19 +138,28 @@ func Test_AccumulatorOps(t *testing.T) {
 		d := NewRegisterWithFloat64(0.8)
 		op.Args[0].RawValue = d.ToQFormat(0, 10)
 		op.Args[1].RawValue = c.ToQFormat(1, 14)
-		expectedF := 0.5*math.Exp(0.7) + 0.8
+
+		// When ACC >= 0.0
+		expectedF := 0.5*0.9999998807907104 + 0.8
 		expected := NewRegisterWithFloat64(expectedF)
 
 		applyOp(op, state)
-
-		// FIXME: Due to precision issues the result might
-		// vary quite a bit when dealing with
-		// exponentials. How can we properly test this?
-		// (20220216 handegar)
 		if !state.ACC.EqualWithEpsilon(expected, 10) {
 			t.Errorf("C * EXP(ACC) + D != %f. Got %f",
 				expected.ToFloat64(), state.ACC.ToFloat64())
 		}
+
+		// When ACC < 0.0
+		state.ACC.SetFloat64(-0.5)
+		expectedF = 0.5*math.Exp(-0.5*16.0) + 0.8
+		expected = NewRegisterWithFloat64(expectedF)
+
+		applyOp(op, state)
+		if !state.ACC.EqualWithEpsilon(expected, 10) {
+			t.Errorf("C * EXP(ACC) + D != %f. Got %f",
+				expected.ToFloat64(), state.ACC.ToFloat64())
+		}
+
 	})
 
 	t.Run("SKP", func(t *testing.T) {
@@ -571,9 +593,9 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[3].RawValue = 0x0   // Flags
 
 		applyOp(op, state)
-		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state))] {
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
-				state.DelayRAM[1000+int(GetLFOValue(0, state))],
+				state.DelayRAM[1000+int(GetLFOValue(0, state, false))],
 				state.ACC.Value)
 		}
 
@@ -581,9 +603,9 @@ func Test_LFOOps(t *testing.T) {
 		state.ACC.Clear()
 		state.Sin0State.Angle = 3.1415 / 2.0
 		applyOp(op, state)
-		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state))] {
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
-				state.DelayRAM[1000+int(GetLFOValue(0, state))],
+				state.DelayRAM[1000+int(GetLFOValue(0, state, false))],
 				state.ACC.Value)
 		}
 
@@ -591,9 +613,9 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[1].RawValue = 0x01 // Type (SIN1)
 		state.Sin1State.Angle = 0.0
 		applyOp(op, state)
-		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state))] {
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
-				state.DelayRAM[1000+int(GetLFOValue(1, state))],
+				state.DelayRAM[1000+int(GetLFOValue(1, state, false))],
 				state.ACC.Value)
 		}
 
@@ -601,9 +623,9 @@ func Test_LFOOps(t *testing.T) {
 		state.ACC.Clear()
 		state.Sin1State.Angle = 3.1415 / 2.0
 		applyOp(op, state)
-		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state))] {
+		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
-				state.DelayRAM[1000+int(GetLFOValue(1, state))],
+				state.DelayRAM[1000+int(GetLFOValue(1, state, false))],
 				state.ACC.Value)
 		}
 

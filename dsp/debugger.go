@@ -80,7 +80,7 @@ func generateCodeListing(opCodes []base.Op, state *State, screenHeight int) stri
 
 		for _, p := range skpTargets {
 			if p == ((lineNo + i) - 1) {
-				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo)
+				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo+i)
 				lines = append(lines, skpLine)
 			}
 		}
@@ -97,11 +97,16 @@ func updateStateView(state *State) {
 	twidth, theight := termui.TerminalDimensions()
 	theight = theight - 1 // Save one for the keys line
 
-	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:yellow,mod:bold) %d (%f)\n"+
+	accColor := "yellow"
+	if state.ACC.ToFloat64() > 1.0 {
+		accColor = "red"
+	}
+
+	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:%s,mod:bold) %d (%f)\n"+
 		"[PACC:](fg:yellow) %f, [LR:](fg:yellow) %f\n"+
 		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RUN_FLAG:](fg:yellow) %t\n",
 		state.IP,
-		state.ACC.Value, state.ACC.ToFloat64(),
+		accColor, state.ACC.Value, state.ACC.ToFloat64(),
 		state.PACC.ToFloat64(), state.LR.ToFloat64(),
 		state.Registers[base.ADDR_PTR].Value,
 		state.DelayRAMPtr,

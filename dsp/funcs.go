@@ -19,22 +19,28 @@ func ProcessSample(opCodes []base.Op, state *State) bool {
 
 	clockDelta := settings.ClockFrequency / settings.SampleRate
 
+	// FIXME: Update LFO each sample for now to keep thinks
+	// simple. (20220222 handegar)
+	updateLFOStates(state, clockDelta)
+
 	for state.IP = 0; state.IP < uint(len(opCodes)); {
+		if int(state.IP) > len(opCodes) { // The program has ended.
+			break
+		}
+
 		op := opCodes[state.IP]
+
+		// FIXME: We should update the LFO at every cycle, not
+		// just every sample. This is how the Chip does
+		// it. (20220222 handegar)
+		//updateLFOStates(state, clockDelta)
+
+		applyOp(op, state)
 
 		// Print pre-op state
 		if settings.Debugger && skipToNextSample != true {
-			/*
-				color.Blue("IP=%d (of %d), ACC=%d(%f), ADDR_PTR=%d, DelayRAMPtr=%d",
-					state.IP, len(opCodes), state.ACC.Value, state.ACC.ToFloat64(),
-					state.Registers[base.ADDR_PTR].Value, state.DelayRAMPtr)
-				color.Green(disasm.OpCodeToString(op))
-			*/
 			UpdateDebuggerScreen(opCodes, state)
 		}
-
-		updateLFOStates(state, clockDelta)
-		applyOp(op, state)
 
 		if settings.Debugger && skipToNextSample != true {
 			e := WaitForDebuggerInput(state)
@@ -47,39 +53,6 @@ func ProcessSample(opCodes []base.Op, state *State) bool {
 				skipToNextSample = true
 				break
 			}
-			/*
-				// Print post-op state
-				color.White("  => ACC=%d(%f), ADDR_PTR=%d",
-					state.ACC.Value, state.ACC.ToFloat64(), state.Registers[base.ADDR_PTR].Value)
-
-				fmt.Println()
-				color.Yellow(debugPrompt)
-				for skipToNextSample != true {
-					char, _, err := keyboard.GetKey()
-
-					if err != nil {
-						fmt.Printf("ERROR: %d\n", err)
-						return
-					}
-
-					if char == 'q' {
-						_ = keyboard.Close()
-						syscall.Exit(1)
-					} else if char == 'p' {
-						color.Cyan(disasm.OpCodeToString(op))
-						color.Yellow(debugPrompt)
-					} else if char == 'v' {
-						state.Print()
-						color.Yellow(debugPrompt)
-					} else if char == 'n' {
-						break
-					} else if char == 's' {
-						skipToNextSample = true
-						color.Red("Skipping to next sample")
-						break
-					}
-				}
-			*/
 		}
 
 		state.IP += 1
@@ -107,39 +80,32 @@ func ProcessSample(opCodes []base.Op, state *State) bool {
 }
 
 func updateLFOStates(state *State, clockDelta float64) {
-	// FIXME: This is measured by hand but I am not sure if it is
-	// correct. Investigate. (20220207 handegar)
-
-	sin0Freq := 0.0
-	if state.Registers[base.SIN0_RATE].ToInt32() != 0 {
-		sin0Freq = 1.0 / float64(state.Registers[base.SIN0_RATE].ToInt32())
-	}
-
-	sin1Freq := 0.0
-	if state.Registers[base.SIN1_RATE].ToInt32() != 0 {
-		sin1Freq = 1.0 / float64(state.Registers[base.SIN1_RATE].ToInt32())
-	}
+	// Sin LFO range is from 0.5Hz to 20Hz
+	sin0Freq := 0.5 + (state.Registers[base.SIN0_RATE].ToFloat64() * (20 - 0.5))
+	sin1Freq := 0.5 + (state.Registers[base.SIN1_RATE].ToFloat64() * (20 - 0.5))
 
 	// Update Sine-LFOs
-	sin0delta := ((2.0 * sin0Freq * math.Pi) / settings.SampleRate) / 8.0 // NB: 8.0 is just a gut feel
+	sin0delta := (2 * math.Pi * sin0Freq) / settings.SampleRate
 	state.Sin0State.Angle += sin0delta
-	sin1delta := ((2.0 * sin1Freq * math.Pi) / settings.SampleRate) / 8.0
+
+	sin1delta := (2 * math.Pi * sin1Freq) / settings.SampleRate
 	state.Sin1State.Angle += sin1delta
 
-	// Update Ramp-LFO
-	ramp0delta := float64(state.Registers[base.RAMP0_RATE].ToInt32()) / clockDelta
-	ramp1delta := float64(state.Registers[base.RAMP1_RATE].ToInt32()) / clockDelta
+	// Ramp LFO range is -16384 to 32767 (-0.5, 0.99)
+	ramp0delta := state.Registers[base.RAMP0_RATE].ToFloat64() / settings.SampleRate
+	ramp1delta := state.Registers[base.RAMP1_RATE].ToFloat64() / settings.SampleRate
 
 	// NOTE: Ramp-values are always positive according to the FV-1 spec.
-	state.Ramp0State.Value += ramp0delta
-	if state.Ramp0State.Value > 1.0 {
+	state.Ramp0State.Value += ramp0delta / (1 << 8)
+	if state.Ramp0State.Value > 0.5 {
 		state.Ramp0State.Value = 0.0
 	}
 
-	state.Ramp1State.Value += ramp1delta
-	if state.Ramp1State.Value > 1.0 {
+	state.Ramp1State.Value += (ramp1delta / 32768.0)
+	if state.Ramp1State.Value > 0.5 {
 		state.Ramp1State.Value = 0.0
 	}
+
 }
 
 /**
@@ -149,9 +115,9 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
 	switch lfoType {
 	case 0, 4:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32()) / (1 << 23)
 	case 1, 5:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) / (1 << 23)
 	case 2:
 		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32())
 	case 3:
