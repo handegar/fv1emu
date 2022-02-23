@@ -8,9 +8,10 @@ import (
 	"github.com/handegar/fv1emu/settings"
 )
 
+var skipNumSamples int = 0
+
 func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	state.IP = 0
-	skipToNextSample := false
 
 	clockDelta := settings.ClockFrequency / settings.SampleRate
 
@@ -31,13 +32,13 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 		//updateLFOStates(state, clockDelta)
 
 		// Print pre-op state
-		if settings.Debugger && skipToNextSample != true {
+		if settings.Debugger && skipNumSamples <= 0 {
 			UpdateDebuggerScreen(opCodes, state, sampleNum)
 		}
 
 		applyOp(op, state)
 
-		if settings.Debugger && skipToNextSample != true {
+		if settings.Debugger && skipNumSamples <= 0 {
 			e := WaitForDebuggerInput(state)
 			switch e {
 			case "quit":
@@ -45,7 +46,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 			case "next op":
 				break
 			case "next sample":
-				skipToNextSample = true
+				skipNumSamples = 1
+				break
+			case "next 100 samples":
+				skipNumSamples = 100
 				break
 			}
 		}
@@ -68,7 +72,9 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	}
 
 	// Stop debug-skipping
-	skipToNextSample = false
+	if skipNumSamples > 0 {
+		skipNumSamples -= 1
+	}
 
 	// FIXME: Shall we wait/NOP for the remaining operations so
 	// that we always execute 128 instructions each sample? To
