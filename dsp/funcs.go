@@ -1,6 +1,7 @@
 package dsp
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -36,7 +37,13 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 			UpdateDebuggerScreen(opCodes, state, sampleNum)
 		}
 
-		applyOp(op, state)
+		err := applyOp(op, state)
+		if err != nil {
+			fmt.Printf("An error occured (IP=%d, Sample=%d):\n",
+				state.IP, sampleNum)
+			state.DebugFlags.Print()
+			panic(false)
+		}
 
 		if settings.Debugger && skipNumSamples <= 0 {
 			e := WaitForDebuggerInput(state)
@@ -91,27 +98,31 @@ func updateLFOStates(state *State, clockDelta float64) {
 	sin1Freq := 0.5 + (state.Registers[base.SIN1_RATE].ToFloat64() * (20 - 0.5))
 
 	// Update Sine-LFOs
-	sin0delta := (2 * math.Pi * sin0Freq) / settings.SampleRate
+	sin0delta := (2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate
 	state.Sin0State.Angle += sin0delta
 
-	sin1delta := (2 * math.Pi * sin1Freq) / settings.SampleRate
+	sin1delta := (2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate
 	state.Sin1State.Angle += sin1delta
 
-	// Ramp LFO range is -16384 to 32767 (-0.5, 0.99)
-	ramp0delta := state.Registers[base.RAMP0_RATE].ToFloat64() / settings.SampleRate
-	ramp1delta := state.Registers[base.RAMP1_RATE].ToFloat64() / settings.SampleRate
+	// Update Ramp-LFOs
+	r0range := state.Registers[base.RAMP0_RANGE].ToFloat64()
+	r0rate := state.Registers[base.RAMP0_RATE].ToFloat64()
+	ramp0delta := (r0range / r0rate) / settings.SampleRate
+
+	r1range := state.Registers[base.RAMP1_RANGE].ToFloat64()
+	r1rate := state.Registers[base.RAMP1_RATE].ToFloat64()
+	ramp1delta := (r1range / r1rate) / settings.SampleRate
 
 	// NOTE: Ramp-values are always positive according to the FV-1 spec.
-	state.Ramp0State.Value += ramp0delta / (1 << 8)
+	state.Ramp0State.Value += ramp0delta
 	if state.Ramp0State.Value > 0.5 {
 		state.Ramp0State.Value = 0.0
 	}
 
-	state.Ramp1State.Value += (ramp1delta / 32768.0)
+	state.Ramp1State.Value += ramp1delta
 	if state.Ramp1State.Value > 0.5 {
 		state.Ramp1State.Value = 0.0
 	}
-
 }
 
 /**
@@ -125,9 +136,9 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	case 1, 5:
 		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) / (1 << 23)
 	case 2:
-		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32()) / (1 << 23)
 	case 3:
-		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32()) / (1 << 23)
 	}
 
 	return value * amp
@@ -176,29 +187,15 @@ func GetLFOValue(lfoType int, state *State, retrieveOnly bool) float64 {
 	return lfo
 }
 
-func GetLFOMaximum(lfoType int, state *State) float64 {
-	switch lfoType {
-	case 0:
-		return float64(state.Registers[base.SIN0_RANGE].ToInt32())
-	case 1:
-		return float64(state.Registers[base.SIN1_RANGE].ToInt32())
-	case 2:
-		return float64(state.Registers[base.RAMP0_RANGE].ToInt32())
-	case 3:
-		return float64(state.Registers[base.RAMP1_RANGE].ToInt32())
-	}
-	return 0.0
-}
-
 // Ensure the DelayRAM index is within bounds
-func capDelayRAMIndex(in int) int {
+func capDelayRAMIndex(in int, state *State) (int, error) {
+	var err error = nil
 	if in > DELAY_RAM_SIZE {
-		fmt.Printf("ERROR: DelayRAM index out of bounds: %d (len=%d)\n",
-			in, DELAY_RAM_SIZE)
-		//panic(false)
+		err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (len=%d)",
+			in, DELAY_RAM_SIZE))
 	}
 
-	return in & 0x7fff
+	return in & 0x7fff, err
 }
 
 func clampInteger(in int) int {

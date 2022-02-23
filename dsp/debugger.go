@@ -36,8 +36,7 @@ func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
 			"[f:](fg:black) Floats/Ints "
 
 	helpLine.Border = false
-	helpLine.TextStyle.Fg = termui.ColorWhite
-	helpLine.TextStyle.Bg = termui.ColorBlue
+	helpLine.TextStyle = termui.NewStyle(termui.ColorWhite, termui.ColorBlue)
 	helpLine.SetRect(0, height-1, width, height)
 	ui.Render(helpLine)
 }
@@ -134,32 +133,37 @@ func updateStateView(state *State, sampleNum int) {
 		overflowColored(state.Registers[base.DACL].ToFloat64(), -1.0, 1.0),
 		overflowColored(state.Registers[base.DACR].ToFloat64(), -1.0, 1.0))
 
-	potStr := fmt.Sprintf("[POT0](fg:cyan)=%f, [POT1](fg:cyan)=%f, [POT2](fg:cyan)=%f\n",
+	potStr := fmt.Sprintf("[POT0](fg:cyan)=%.4f, [POT1](fg:cyan)=%.4f, [POT2](fg:cyan)=%.4f\n",
 		state.Registers[base.POT0].ToFloat64(),
 		state.Registers[base.POT1].ToFloat64(),
 		state.Registers[base.POT2].ToFloat64())
 
-	lfoStr := fmt.Sprintf("[SIN0](fg:yellow) [Rate:](fg:cyan) %d (%f)\n     [Range:](fg:cyan) %d (%f)\n"+
-		"[SIN1](fg:yellow) [Rate:](fg:cyan) %d (%f)\n     [Range:](fg:cyan) %d (%f)\n",
+	lfoStr := fmt.Sprintf("[SIN0](fg:yellow)  [Rate:](fg:cyan) %d (%f)  [\u03B10:](fg:cyan) %f\n"+
+		"      [Range:](fg:cyan) %d (%f)\n"+
+		"[SIN1](fg:yellow)  [Rate:](fg:cyan) %d (%f)  [\u03B11:](fg:cyan) %f\n"+
+		"      [Range:](fg:cyan) %d (%f)\n",
 		state.Registers[base.SIN0_RATE].Value, state.Registers[base.SIN0_RATE].ToFloat64(),
+		GetLFOValue(0, state, false),
 		state.Registers[base.SIN0_RANGE].Value, state.Registers[base.SIN0_RANGE].ToFloat64(),
 		state.Registers[base.SIN1_RATE].Value, state.Registers[base.SIN1_RATE].ToFloat64(),
+		GetLFOValue(1, state, false),
 		state.Registers[base.SIN1_RANGE].Value, state.Registers[base.SIN1_RANGE].ToFloat64())
-	lfoStr += fmt.Sprintf("[SIN0](fg:yellow) [\u03B1:](fg:cyan) %f, "+
-		"[SIN1](fg:yellow) [\u03B1:](fg:cyan) %f\n",
-		GetLFOValue(0, state, false), GetLFOValue(1, state, false))
-	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d  [Range:](fg:cyan) %d\n"+
-		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d  [Range:](fg:cyan) %d\n",
-		state.Registers[base.RAMP0_RATE].Value, state.Registers[base.RAMP0_RANGE].Value,
-		state.Registers[base.RAMP1_RATE].Value, state.Registers[base.RAMP1_RANGE].Value)
-	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [\u0394:](fg:cyan) %f, "+
-		"[RAMP1](fg:yellow) [\u0394:](fg:cyan) %f\n",
-		GetLFOValue(2, state, false), GetLFOValue(3, state, false))
+	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d (%f)  [\u03940:](fg:cyan) %f\n"+
+		"      [Range:](fg:cyan) %d (%f)\n"+
+		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d (%f)  [\u03941:](fg:cyan) %f\n"+
+		"      [Range:](fg:cyan) %d (%f)",
+		state.Registers[base.RAMP0_RATE].Value, state.Registers[base.RAMP0_RATE].ToFloat64(),
+		GetLFOValue(2, state, false),
+		state.Registers[base.RAMP0_RANGE].Value, state.Registers[base.RAMP0_RANGE].ToFloat64(),
+		state.Registers[base.RAMP1_RATE].Value, state.Registers[base.RAMP1_RATE].ToFloat64(),
+		GetLFOValue(3, state, false),
+		state.Registers[base.RAMP1_RANGE].Value, state.Registers[base.RAMP1_RANGE].ToFloat64())
 
 	vPos := 0
 	stateP := widgets.NewParagraph()
 	stateP.Title = fmt.Sprintf("  State (sample #%d)  ", sampleNum)
 	stateP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	stateP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	stateP.Text = stateStr + ioStr + potStr
 	stateP.SetRect(twidth/2-1, vPos, twidth, vPos+8)
 	vPos += 8
@@ -167,6 +171,7 @@ func updateStateView(state *State, sampleNum int) {
 	lfoP := widgets.NewParagraph()
 	lfoP.Title = "  LFOs  "
 	lfoP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	lfoP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	lfoP.Text = lfoStr
 	lfoP.SetRect(twidth/2-1, vPos, twidth, vPos+10)
 	vPos += 10
@@ -194,6 +199,7 @@ func updateStateView(state *State, sampleNum int) {
 		regP.Title += " (as integers)  "
 	}
 	regP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	regP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	regP.Text = regStr
 	regP.SetRect(twidth/2-1, vPos, twidth, theight-5)
 

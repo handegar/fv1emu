@@ -56,6 +56,8 @@ func parseCommandLineParameters() {
 
 	var allPotsToMax bool = false
 	flag.BoolVar(&allPotsToMax, "pmax", allPotsToMax, "Set all potentiometers to max")
+	var allPotsToMin bool = false
+	flag.BoolVar(&allPotsToMax, "pmin", allPotsToMax, "Set all potentiometers to min")
 
 	flag.Parse()
 
@@ -64,6 +66,11 @@ func parseCommandLineParameters() {
 		settings.Pot0Value = 1.0
 		settings.Pot1Value = 1.0
 		settings.Pot2Value = 1.0
+	} else if allPotsToMin {
+		fmt.Println("* Setting all potentiometers to min")
+		settings.Pot0Value = 0
+		settings.Pot1Value = 0
+		settings.Pot2Value = 0
 	}
 }
 
@@ -212,6 +219,7 @@ func main() {
 
 	start := time.Now()
 	var state *dsp.State = dsp.NewState()
+	sampleNum := 0
 
 	var outSamples []wav.Sample
 	for {
@@ -220,7 +228,7 @@ func main() {
 			break
 		}
 
-		for sampleNum, sample := range samples {
+		for _, sample := range samples {
 			var left float64 = reader.FloatValue(sample, 0)
 			var right float64 = left
 			if isStereo {
@@ -234,6 +242,8 @@ func main() {
 			if !cont {
 				return
 			}
+
+			sampleNum += 1
 		}
 	}
 

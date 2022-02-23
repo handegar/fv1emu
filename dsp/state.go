@@ -1,6 +1,7 @@
 package dsp
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/handegar/fv1emu/base"
@@ -46,8 +47,8 @@ type DebugFlags struct {
 	InvalidSin0Values  bool
 	InvalidSin1Values  bool
 
-	OutOfBoundsMemoryRead  bool // Not set yet
-	OutOfBoundsMemoryWrite bool // Not set yet
+	OutOfBoundsMemoryRead  int
+	OutOfBoundsMemoryWrite int
 
 	InvalidRegister int // Not set yet
 
@@ -74,14 +75,24 @@ func (df *DebugFlags) SetRampLFOFlag(lfoNum int32) {
 	}
 }
 
+func (df *DebugFlags) IncreaseOutOfBoundsMemoryRead() error {
+	df.OutOfBoundsMemoryRead += 1
+	return errors.New("Out-of-bounds memory read")
+}
+
+func (df *DebugFlags) IncreaseOutOfBoundsMemoryWrite() error {
+	df.OutOfBoundsMemoryWrite += 1
+	return errors.New("Out-of-bounds memory write")
+}
+
 func (df *DebugFlags) Reset() {
 	df.InvalidRamp0Values = false
 	df.InvalidRamp1Values = false
 	df.InvalidSin0Values = false
 	df.InvalidSin1Values = false
 
-	df.OutOfBoundsMemoryRead = false
-	df.OutOfBoundsMemoryWrite = false
+	df.OutOfBoundsMemoryRead = 0
+	df.OutOfBoundsMemoryWrite = 0
 
 	df.InvalidRegister = 0
 
@@ -182,6 +193,10 @@ func (s *State) Reset() {
 
 	s.sinLFOReg = NewRegister(0)
 	s.rampLFOReg = NewRegister(0)
+	s.Sin0State.Angle = 0.0
+	s.Sin1State.Angle = 0.0
+	s.Ramp0State.Value = 0.0
+	s.Ramp1State.Value = 0.0
 
 	s.workRegA = NewRegister(0)
 	s.workRegB = NewRegister(0)

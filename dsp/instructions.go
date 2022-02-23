@@ -1,13 +1,14 @@
 package dsp
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/handegar/fv1emu/base"
 )
 
 var opTable = map[string]interface{}{
-	"LOG": func(op base.Op, state *State) {
+	"LOG": func(op base.Op, state *State) error {
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
 		// NOTE: According to the SPIN datasheet the second
 		// parameter for LOG is supposed to be a S4.6 number,
@@ -27,8 +28,9 @@ var opTable = map[string]interface{}{
 		state.workRegA.Mult(state.workReg1_14)
 		state.workRegA.Add(state.workReg0_10)
 		state.ACC.Copy(state.workRegA)
+		return nil
 	},
-	"EXP": func(op base.Op, state *State) {
+	"EXP": func(op base.Op, state *State) error {
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
 		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
@@ -40,32 +42,38 @@ var opTable = map[string]interface{}{
 			acc = acc * 16.0
 			state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
 		}
-
+		return nil
 	},
-	"SOF": func(op base.Op, state *State) {
+	"SOF": func(op base.Op, state *State) error {
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
 		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
 		// C * ACC + D
 		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.workReg0_10)
 		state.ACC.Copy(state.workRegA)
+		return nil
 	},
-	"AND": func(op base.Op, state *State) {
+	"AND": func(op base.Op, state *State) error {
 		state.ACC.And(op.Args[1].RawValue)
+		return nil
 	},
-	"CLR": func(op base.Op, state *State) {
+	"CLR": func(op base.Op, state *State) error {
 		state.ACC.Clear()
+		return nil
 	},
-	"OR": func(op base.Op, state *State) {
+	"OR": func(op base.Op, state *State) error {
 		state.ACC.Or(op.Args[1].RawValue)
+		return nil
 	},
-	"XOR": func(op base.Op, state *State) {
+	"XOR": func(op base.Op, state *State) error {
 		state.ACC.Xor(op.Args[1].RawValue)
+		return nil
 	},
-	"NOT": func(op base.Op, state *State) {
+	"NOT": func(op base.Op, state *State) error {
 		state.ACC.Not(op.Args[1].RawValue)
+		return nil
 	},
-	"SKP": func(op base.Op, state *State) {
+	"SKP": func(op base.Op, state *State) error {
 		flags := int(op.Args[2].RawValue)
 		N := op.Args[1].RawValue
 		jmp := false
@@ -90,49 +98,74 @@ var opTable = map[string]interface{}{
 		if jmp {
 			state.IP += uint(N)
 		}
+		return nil
 	},
-	"RDA": func(op base.Op, state *State) {
+	"RDA": func(op base.Op, state *State) error {
 		addr := op.Args[0].RawValue
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
-		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
+		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
+		if err != nil {
+			fmt.Printf("RDA: %s\n", err)
+			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
+		}
+
 		delayValue := state.DelayRAM[idx]
 		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
 
 		// SRAM[ADDR] * C + ACC
 		state.workRegA.Copy(state.LR).Mult(state.workReg1_9)
 		state.ACC.Add(state.workRegA)
+		return nil
 	},
-	"RMPA": func(op base.Op, state *State) {
+	"RMPA": func(op base.Op, state *State) error {
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 		addr := state.Registers[base.ADDR_PTR].Value >> 8               // ADDR_PTR
-		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
+		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
+		if err != nil {
+			fmt.Printf("RMPA: %s\n", err)
+			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
+		}
+
 		delayValue := state.DelayRAM[idx]
 		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
 
 		// SRAM[PNTR[N]] * C + ACC
 		state.workRegA.Copy(state.LR).Mult(state.workReg1_9)
 		state.ACC.Add(state.workRegA)
+		return nil
 	},
-	"WRA": func(op base.Op, state *State) {
+	"WRA": func(op base.Op, state *State) error {
 		addr := op.Args[0].RawValue
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 
 		// ACC->SRAM[ADDR], ACC * C
-		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
+		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
+		if err != nil {
+			fmt.Printf("WRA: %s\n", err)
+			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
+		}
+
 		state.DelayRAM[idx] = state.ACC.ToQFormat(0, 23)
 		state.ACC.Mult(state.workReg1_9)
+		return nil
 	},
-	"WRAP": func(op base.Op, state *State) {
+	"WRAP": func(op base.Op, state *State) error {
 		addr := op.Args[0].RawValue
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 
 		// ACC->SRAM[ADDR], (ACC*C) + LR
-		idx := capDelayRAMIndex(int(addr) + state.DelayRAMPtr)
+		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
+		if err != nil {
+			fmt.Printf("WRAP: %s\n", err)
+			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
+		}
+
 		// FIXME: Rescale from S7.24 to S0.23. Is this correct? (20220212 handegar)
 		state.DelayRAM[idx] = state.ACC.ToQFormat(0, 23)
 		state.ACC.Mult(state.workReg1_9).Add(state.LR)
+		return nil
 	},
-	"RDAX": func(op base.Op, state *State) {
+	"RDAX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 		reg := state.GetRegister(regNo)
@@ -140,16 +173,18 @@ var opTable = map[string]interface{}{
 		// (C * REG) + ACC
 		state.workRegA.Copy(reg).Mult(state.workReg1_14)
 		state.ACC.Add(state.workRegA)
+		return nil
 	},
-	"WRAX": func(op base.Op, state *State) {
+	"WRAX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], C * ACC
 		state.GetRegister(regNo).Copy(state.ACC)
 		state.ACC.Mult(state.workReg1_14)
+		return nil
 	},
-	"MAXX": func(op base.Op, state *State) {
+	"MAXX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
@@ -162,16 +197,19 @@ var opTable = map[string]interface{}{
 		} else {
 			state.ACC.Copy(state.workRegB)
 		}
+		return nil
 	},
-	"ABSA": func(op base.Op, state *State) {
+	"ABSA": func(op base.Op, state *State) error {
 		state.ACC.Abs()
+		return nil
 	},
-	"MULX": func(op base.Op, state *State) {
+	"MULX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		reg := state.GetRegister(regNo)
 		state.ACC.Mult(reg)
+		return nil
 	},
-	"RDFX": func(op base.Op, state *State) {
+	"RDFX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 		reg := state.GetRegister(regNo)
@@ -180,13 +218,15 @@ var opTable = map[string]interface{}{
 		state.workRegA.Copy(state.ACC)
 		state.workRegA.Sub(reg).Mult(state.workReg1_14).Add(reg)
 		state.ACC.Copy(state.workRegA)
+		return nil
 	},
-	"LDAX": func(op base.Op, state *State) {
+	"LDAX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		reg := state.GetRegister(regNo)
 		state.ACC.Copy(reg)
+		return nil
 	},
-	"WRLX": func(op base.Op, state *State) {
+	"WRLX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
@@ -194,8 +234,9 @@ var opTable = map[string]interface{}{
 		state.GetRegister(regNo).Copy(state.ACC)
 		state.workRegA.Copy(state.PACC).Sub(state.ACC).Mult(state.workReg1_14).Add(state.PACC)
 		state.ACC.Copy(state.workRegA)
+		return nil
 	},
-	"WRHX": func(op base.Op, state *State) {
+	"WRHX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
@@ -203,8 +244,9 @@ var opTable = map[string]interface{}{
 		state.GetRegister(regNo).Copy(state.ACC)
 		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.PACC)
 		state.ACC.Copy(state.workRegA)
+		return nil
 	},
-	"WLDS": func(op base.Op, state *State) {
+	"WLDS": func(op base.Op, state *State) error {
 		freq := op.Args[1].RawValue // Really "1/freq"
 		amp := op.Args[0].RawValue
 
@@ -234,8 +276,9 @@ var opTable = map[string]interface{}{
 			state.GetRegister(base.SIN1_RANGE).SetInt32(amp)
 			state.Sin1State.Angle = 0.0
 		}
+		return nil
 	},
-	"WLDR": func(op base.Op, state *State) {
+	"WLDR": func(op base.Op, state *State) error {
 		amp, valid := base.RampAmpValuesMap[op.Args[0].RawValue]
 		if !valid {
 			amp = 0
@@ -260,22 +303,24 @@ var opTable = map[string]interface{}{
 			state.GetRegister(base.RAMP1_RANGE).SetInt32(amp)
 			state.Ramp1State.Value = 0
 		}
+		return nil
 	},
-	"JAM": func(op base.Op, state *State) {
+	"JAM": func(op base.Op, state *State) error {
 		num := op.Args[1].RawValue
 		if num == 0 {
 			state.Ramp0State.Value = 0
 		} else {
 			state.Ramp1State.Value = 0
 		}
+		return nil
 	},
-	"CHO RDA": func(op base.Op, state *State) {
+	"CHO RDA": func(op base.Op, state *State) error {
 		addr := int(op.Args[0].RawValue)
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
 
 		if (flags&base.CHO_COS) != 0 && (typ == 0 || typ == 1) {
-			typ += 2 // Make SIN -> COS
+			typ += 4 // Make SIN -> COS
 		}
 
 		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
@@ -289,7 +334,12 @@ var opTable = map[string]interface{}{
 		}
 
 		delayIndex := addr + int(scaledLFO)
-		idx := capDelayRAMIndex(state.DelayRAMPtr + delayIndex)
+		idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
+		if err != nil {
+			fmt.Printf("CHO RDA: %s\n", err)
+			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
+		}
+
 		state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 
 		interpolate := (lfo + 1.0) / 2.0 // get 0...1.0
@@ -304,8 +354,9 @@ var opTable = map[string]interface{}{
 		if (flags & 0x20) != 0 { // NA
 			// FIXME: Handle the NA flag here (20220207 handegar)
 		}
+		return nil
 	},
-	"CHO SOF": func(op base.Op, state *State) {
+	"CHO SOF": func(op base.Op, state *State) error {
 		addr := int(op.Args[0].RawValue)
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
@@ -323,15 +374,18 @@ var opTable = map[string]interface{}{
 
 		state.workRegB.SetWithIntsAndFracs(int32(addr), 0, 15)
 		state.ACC.Mult(state.workRegA).Add(state.workRegB)
+		return nil
 	},
-	"CHO RDAL": func(op base.Op, state *State) {
+	"CHO RDAL": func(op base.Op, state *State) error {
 		typ := int(op.Args[1].RawValue)
 		lfo := GetLFOValue(typ, state, false)
 		lfoScaled := ScaleLFOValue(lfo, typ, state)
 		state.ACC.SetFloat64(lfoScaled)
+		return nil
 	},
 }
 
-func applyOp(opCode base.Op, state *State) {
-	opTable[opCode.Name].(func(op base.Op, state *State))(opCode, state)
+func applyOp(opCode base.Op, state *State) error {
+	err := opTable[opCode.Name].(func(op base.Op, state *State) error)(opCode, state)
+	return err
 }
