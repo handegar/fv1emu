@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	ui "github.com/gizak/termui/v3"
+
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
 )
@@ -39,8 +41,12 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 
 		err := applyOp(op, state)
 		if err != nil {
+			if settings.Debugger {
+				ui.Close()
+			}
 			fmt.Printf("An error occured (IP=%d, Sample=%d):\n",
 				state.IP, sampleNum)
+			fmt.Println(err)
 			state.DebugFlags.Print()
 			panic(false)
 		}
@@ -108,10 +114,16 @@ func updateLFOStates(state *State, clockDelta float64) {
 	r0range := state.Registers[base.RAMP0_RANGE].ToFloat64()
 	r0rate := state.Registers[base.RAMP0_RATE].ToFloat64()
 	ramp0delta := (r0range / r0rate) / settings.SampleRate
+	if r0rate == 0.0 {
+		ramp0delta = 0.0
+	}
 
 	r1range := state.Registers[base.RAMP1_RANGE].ToFloat64()
 	r1rate := state.Registers[base.RAMP1_RATE].ToFloat64()
 	ramp1delta := (r1range / r1rate) / settings.SampleRate
+	if r1rate == 0.0 {
+		ramp1delta = 0.0
+	}
 
 	// NOTE: Ramp-values are always positive according to the FV-1 spec.
 	state.Ramp0State.Value += ramp0delta
