@@ -45,15 +45,26 @@ func parseCommandLineParameters() {
 	flag.Float64Var(&settings.ClockFrequency, "clock", settings.ClockFrequency, "Chrystal frequency")
 	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds, "Additional trail length (seconds)")
 
-	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value, "Potetiometer 0 value (0 .. 1.0)")
-	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value, "Potetiometer 1 value (0 .. 1.0)")
-	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value, "Potetiometer 2 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value, "Potentiometer 0 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value, "Potentiometer 1 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value, "Potentiometer 2 value (0 .. 1.0)")
 
 	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode, "Print program code")
 
 	flag.BoolVar(&settings.Debugger, "debug", settings.Debugger, "Enable step-debugger user-interface")
 	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug, "Print additional info when debugging")
+
+	var allPotsToMax bool = false
+	flag.BoolVar(&allPotsToMax, "pmax", allPotsToMax, "Set all potentiometers to max")
+
 	flag.Parse()
+
+	if allPotsToMax {
+		fmt.Println("* Setting all potentiometers to max")
+		settings.Pot0Value = 1.0
+		settings.Pot1Value = 1.0
+		settings.Pot2Value = 1.0
+	}
 }
 
 func updateWavStatistics(left int32, right int32, statistics *WavStatistics) {
@@ -209,13 +220,13 @@ func main() {
 			break
 		}
 
-		for _, sample := range samples {
+		for sampleNum, sample := range samples {
 			var left float64 = reader.FloatValue(sample, 0)
 			var right float64 = left
 			if isStereo {
 				right = reader.FloatValue(sample, 1)
 			}
-			outLeft, outRight, cont := processSample(left, right, state, opCodes)
+			outLeft, outRight, cont := processSample(left, right, state, opCodes, sampleNum)
 			updateWavStatistics(outLeft, outRight, &statistics)
 			outSamples = append(outSamples,
 				wav.Sample{[2]int{int(outLeft), int(outRight)}})
@@ -231,16 +242,17 @@ func main() {
 	}
 
 	// Do trail-samples?
+	numSamples := len(outSamples)
 	numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
 	for i := 0; i < numTrailSamples; i++ {
-		outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes)
+		outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes, i+numSamples)
 		updateWavStatistics(outLeft, outRight, &statistics)
 		outSamples = append(outSamples,
 			wav.Sample{[2]int{int(outLeft), int(outRight)}})
 	}
 
 	duration := time.Since(start)
-	fmt.Printf("   -> ..took %s\n", duration)
+	fmt.Printf("   -> ..took %s (%d samples)\n", duration, len(outSamples))
 
 	statistics.Left.Mean = statistics.Left.Mean / int(statistics.NumSamples)
 	statistics.Right.Mean = statistics.Right.Mean / int(statistics.NumSamples)
@@ -250,10 +262,10 @@ func main() {
 }
 
 // Returns an Int-pair (16bits signed)
-func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op) (int32, int32, bool) {
+func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op, sampleNum int) (int32, int32, bool) {
 	state.GetRegister(base.ADCL).SetFloat64(inLeft)
 	state.GetRegister(base.ADCR).SetFloat64(inRight)
-	cont := dsp.ProcessSample(opCodes, state)
+	cont := dsp.ProcessSample(opCodes, state, sampleNum)
 	outLeft := int32(state.GetRegister(base.DACL).ToFloat64() * (1 << 15))
 	outRight := int32(state.GetRegister(base.DACR).ToFloat64() * (1 << 15))
 	return outLeft, outRight, cont

@@ -208,6 +208,23 @@ var opTable = map[string]interface{}{
 		freq := op.Args[1].RawValue // Really "1/freq"
 		amp := op.Args[0].RawValue
 
+		// Cap values
+		if freq < 0 {
+			freq = 0
+			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+		} else if freq > 511 {
+			freq = 511
+			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+		}
+
+		if amp < 0 {
+			amp = 0
+			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+		} else if amp > (1 << 15) { // 32768
+			amp = (1 << 15) - 1
+			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+		}
+
 		if op.Args[2].RawValue == 0 { // SIN0
 			state.GetRegister(base.SIN0_RATE).SetInt32(freq)
 			state.GetRegister(base.SIN0_RANGE).SetInt32(amp)
@@ -219,8 +236,21 @@ var opTable = map[string]interface{}{
 		}
 	},
 	"WLDR": func(op base.Op, state *State) {
-		amp := base.RampAmpValues[int(op.Args[0].RawValue)]
+		amp, valid := base.RampAmpValuesMap[op.Args[0].RawValue]
+		if !valid {
+			amp = 0
+			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+		}
 		freq := op.Args[2].RawValue
+		// cap frequency value
+		if freq < -(1 << 14) { // -16384
+			freq = -(1 << 14) + 1
+			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+		} else if freq > (1 << 15) { // 32768
+			freq = (1 << 15) - 1
+			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+		}
+
 		if op.Args[3].RawValue == 0 { // RAMP0
 			state.GetRegister(base.RAMP0_RATE).SetInt32(freq)
 			state.GetRegister(base.RAMP0_RANGE).SetInt32(amp)

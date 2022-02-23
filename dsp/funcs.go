@@ -8,12 +8,7 @@ import (
 	"github.com/handegar/fv1emu/settings"
 )
 
-const debugPrompt = "< (N)ext op | Next (s)ample | (V)iew state | (P)rint op | (Q)uit >"
-
-/*
-
- */
-func ProcessSample(opCodes []base.Op, state *State) bool {
+func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	state.IP = 0
 	skipToNextSample := false
 
@@ -23,7 +18,7 @@ func ProcessSample(opCodes []base.Op, state *State) bool {
 	// simple. (20220222 handegar)
 	updateLFOStates(state, clockDelta)
 
-	for state.IP = 0; state.IP < uint(len(opCodes)); {
+	for state.IP < uint(len(opCodes)) {
 		if int(state.IP) > len(opCodes) { // The program has ended.
 			break
 		}
@@ -31,16 +26,16 @@ func ProcessSample(opCodes []base.Op, state *State) bool {
 		op := opCodes[state.IP]
 
 		// FIXME: We should update the LFO at every cycle, not
-		// just every sample. This is how the Chip does
+		// just every sample. This is how the FV-1 does
 		// it. (20220222 handegar)
 		//updateLFOStates(state, clockDelta)
 
-		applyOp(op, state)
-
 		// Print pre-op state
 		if settings.Debugger && skipToNextSample != true {
-			UpdateDebuggerScreen(opCodes, state)
+			UpdateDebuggerScreen(opCodes, state, sampleNum)
 		}
+
+		applyOp(op, state)
 
 		if settings.Debugger && skipToNextSample != true {
 			e := WaitForDebuggerInput(state)
@@ -56,11 +51,16 @@ func ProcessSample(opCodes []base.Op, state *State) bool {
 		}
 
 		state.IP += 1
+
+		// Did we clip? Update debug info accordingly
+		state.CheckForOverflows()
 	}
 
 	state.RUN_FLAG = true
-	state.PACC = state.ACC
-	state.ACC.Clear()
+	state.PACC.Copy(state.ACC)
+
+	// FIXME: Should we clear ACC? (20220222 handegar)
+	//state.ACC.Clear()
 
 	state.DelayRAMPtr -= 1
 	if state.DelayRAMPtr <= -32768 {

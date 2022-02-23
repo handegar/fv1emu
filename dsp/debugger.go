@@ -14,10 +14,12 @@ import (
 
 var lastState *State
 var lastOpCodes []base.Op
+var lastSampleNum int
 
-func UpdateDebuggerScreen(opCodes []base.Op, state *State) {
+func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
 	lastState = state
 	lastOpCodes = opCodes
+	lastSampleNum = sampleNum
 
 	updateCodeView(opCodes, state)
 	updateStateView(state)
@@ -29,6 +31,8 @@ func UpdateDebuggerScreen(opCodes []base.Op, state *State) {
 		"[ESC/q/CTRL-C:](fg:black) Quit [|](bg:black) " +
 			"[s/PgDn:](fg:black) Next sample [|](bg:black) " +
 			"[n/Down:](fg:black) Next operation "
+	sampleNumStr := fmt.Sprintf("[|](bg:black) [Sample: %d](fg:yellow) ", sampleNum)
+	helpLine.Text += sampleNumStr
 
 	helpLine.Border = false
 	helpLine.TextStyle.Fg = termui.ColorWhite
@@ -213,5 +217,5 @@ func WaitForDebuggerInput(state *State) string {
 
 func onTerminalResized() {
 	termui.Clear()
-	UpdateDebuggerScreen(lastOpCodes, lastState)
+	UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)
 }

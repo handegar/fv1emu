@@ -583,8 +583,8 @@ func Test_LFOOps(t *testing.T) {
 		state.ACC.Clear()
 		state.GetRegister(base.SIN0_RANGE).Value = 125
 		state.GetRegister(base.SIN1_RANGE).Value = 125
-		for i := 0; i < 1000; i++ {
-			state.DelayRAM[1000+i] = int32(1 + i)
+		for i := 0; i < 125*2; i++ {
+			state.DelayRAM[500+i] = int32(1 + i)
 		}
 		op := base.Ops[0x14]
 		op.Name = "CHO RDA"
@@ -593,9 +593,11 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[3].RawValue = 0x0   // Flags
 
 		applyOp(op, state)
-		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state, false))] {
+		lfo := GetLFOValue(0, state, false)
+		lfoScaled := ScaleLFOValue(lfo, 0, state)
+		if state.ACC.Value != state.DelayRAM[1000+int(lfoScaled)] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
-				state.DelayRAM[1000+int(GetLFOValue(0, state, false))],
+				state.DelayRAM[500+int(lfoScaled)],
 				state.ACC.Value)
 		}
 
@@ -663,9 +665,13 @@ func Test_LFOOps(t *testing.T) {
 		state.Sin0State.Angle = 3.14 / 2.0
 		state.GetRegister(base.SIN0_RANGE).Value = 1
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC.Value),
-			float32(math.Sin(state.Sin0State.Angle)*float64(state.GetRegister(base.SIN0_RANGE).Value))) {
-			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
+
+		lfo := GetLFOValue(0, state, false)
+		lfoScaled := ScaleLFOValue(lfo, 0, state)
+		state.workRegA.SetFloat64(lfoScaled)
+
+		if !state.ACC.Equal(state.workRegA) {
+			t.Errorf("Expected ACC=%f, got %f\n", lfoScaled, state.ACC.ToFloat64())
 		}
 
 		// SIN1
@@ -673,9 +679,13 @@ func Test_LFOOps(t *testing.T) {
 		state.Sin1State.Angle = 3.14 / 2.0
 		state.GetRegister(base.SIN1_RANGE).Value = 1
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC.Value),
-			float32(math.Sin(state.Sin1State.Angle)*float64(state.GetRegister(base.SIN1_RANGE).Value))) {
-			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
+
+		lfo = GetLFOValue(1, state, false)
+		lfoScaled = ScaleLFOValue(lfo, 1, state)
+		state.workRegA.SetFloat64(lfoScaled)
+
+		if !state.ACC.Equal(state.workRegA) {
+			t.Errorf("Expected ACC=%f, got %f\n", lfoScaled, state.ACC.ToFloat64())
 		}
 
 		// RMP0
@@ -683,9 +693,13 @@ func Test_LFOOps(t *testing.T) {
 		state.Ramp0State.Value = 1.23
 		state.GetRegister(base.RAMP0_RANGE).Value = 2
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC.Value),
-			float32(state.Ramp0State.Value*float64(state.GetRegister(base.RAMP0_RANGE).Value))) {
-			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
+
+		lfo = GetLFOValue(2, state, false)
+		lfoScaled = ScaleLFOValue(lfo, 2, state)
+		state.workRegA.SetFloat64(lfoScaled)
+
+		if !state.ACC.Equal(state.workRegA) {
+			t.Errorf("Expected ACC=%f, got %f\n", lfoScaled, state.ACC.ToFloat64())
 		}
 
 		// RMP1
@@ -693,10 +707,15 @@ func Test_LFOOps(t *testing.T) {
 		state.Ramp1State.Value = 1.23
 		state.GetRegister(base.RAMP1_RANGE).Value = 2
 		applyOp(op, state)
-		if float2Compare(float32(state.ACC.Value),
-			float32(state.Ramp1State.Value*float64(state.GetRegister(base.RAMP1_RANGE).Value))) {
-			t.Errorf("Expected ACC=0, got 0x%x\n", state.ACC.Value)
+
+		lfo = GetLFOValue(3, state, false)
+		lfoScaled = ScaleLFOValue(lfo, 3, state)
+		state.workRegA.SetFloat64(lfoScaled)
+
+		if !state.ACC.Equal(state.workRegA) {
+			t.Errorf("Expected ACC=%f, got %f\n", lfoScaled, state.ACC.ToFloat64())
 		}
+
 	})
 
 }

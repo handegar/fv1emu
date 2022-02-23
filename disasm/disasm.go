@@ -259,7 +259,6 @@ func EXP_ToString(op base.Op) string {
 func LOG_ToString(op base.Op) string {
 	return fmt.Sprintf("LOG\t  %f, %f",
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 14),
-		//utils.QFormatToFloat64(op.Args[0].RawValue, 4, 6))
 		utils.QFormatToFloat64(op.Args[0].RawValue, 0, 10))
 }
 
@@ -274,7 +273,7 @@ func WLDS_ToString(op base.Op) string {
 }
 
 func WLDR_ToString(op base.Op) string {
-	amp := int(base.RampAmpValues[int(op.Args[0].RawValue)])
+	amp := int(base.RampAmpValues[op.Args[0].RawValue])
 	freq := int(op.Args[2].RawValue)
 	typ := "RMP0"
 	if op.Args[3].RawValue == 1 {

@@ -163,14 +163,14 @@ var ChoFlagSymbols = map[int]string{
 	CHO_NA:    "NA",
 }
 
-// FIXME: Double check that the list is not supposed to be reversed
-// (20220202 handegar)
-var RampAmpValues = map[int]int32{
-	0: 4096,
-	1: 2048,
-	2: 1024,
-	3: 512,
+var RampAmpValuesMap = map[int32]int32{
+	4096: 0,
+	2048: 1,
+	1024: 2,
+	512:  3,
 }
+
+var RampAmpValues = []int32{4096, 2048, 1024, 512}
 
 var SymbolEquivalents = map[int][]string{
 	0x00: {"SIN0_RATE",

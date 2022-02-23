@@ -22,6 +22,9 @@ type State struct {
 	Sin1State  SINLFOState
 	Ramp0State RAMPState
 	Ramp1State RAMPState
+
+	DebugFlags *DebugFlags // Contains misc debug/error flags which will be set @ runtime
+
 	sinLFOReg  *Register // Holds the frozen sine LFO value
 	rampLFOReg *Register // Holds the frozen ramp LFO value
 
@@ -37,6 +40,87 @@ type State struct {
 	workReg4_6  *Register // S4.6
 }
 
+type DebugFlags struct {
+	InvalidRamp0Values bool
+	InvalidRamp1Values bool
+	InvalidSin0Values  bool
+	InvalidSin1Values  bool
+
+	OutOfBoundsMemoryRead  bool // Not set yet
+	OutOfBoundsMemoryWrite bool // Not set yet
+
+	InvalidRegister int // Not set yet
+
+	ACCOverflowCount  int
+	PACCOverflowCount int
+	LROverflowCount   int
+	DACROverflowCount int
+	DACLOverflowCount int
+}
+
+func (df *DebugFlags) SetSinLFOFlag(lfoNum int32) {
+	if lfoNum == 0 {
+		df.InvalidSin0Values = true
+	} else {
+		df.InvalidSin1Values = true
+	}
+}
+
+func (df *DebugFlags) SetRampLFOFlag(lfoNum int32) {
+	if lfoNum == 0 {
+		df.InvalidRamp0Values = true
+	} else {
+		df.InvalidRamp1Values = true
+	}
+}
+
+func (df *DebugFlags) Reset() {
+	df.InvalidRamp0Values = false
+	df.InvalidRamp1Values = false
+	df.InvalidSin0Values = false
+	df.InvalidSin1Values = false
+
+	df.OutOfBoundsMemoryRead = false
+	df.OutOfBoundsMemoryWrite = false
+
+	df.InvalidRegister = 0
+
+	df.ACCOverflowCount = 0
+	df.PACCOverflowCount = 0
+	df.LROverflowCount = 0
+
+	df.DACROverflowCount = 0
+	df.DACLOverflowCount = 0
+}
+
+func (df *DebugFlags) Print() {
+	fmt.Printf("DebugFlags:\n"+
+		" InvalidRamp0Values = %t\n"+
+		" InvalidRamp1Values = %t\n"+
+		" InvalidSin0Values = %t\n"+
+		" InvalidSin1Values = %t\n"+
+		" OutOfBoundsMemoryRead = %d\n"+
+		" OutOfBoundsMemoryWrite = %d\n"+
+		" InvalidRegister = %d\n"+
+		" ACCOverflowCount = %d\n"+
+		" PACCOverflowCount = %d\n"+
+		" LROverflowCount = %d\n"+
+		" DACROverflowCount = %d\n"+
+		" DACLOverflowCount = %d\n",
+		df.InvalidRamp0Values,
+		df.InvalidRamp1Values,
+		df.InvalidSin0Values,
+		df.InvalidSin1Values,
+		df.OutOfBoundsMemoryRead,
+		df.OutOfBoundsMemoryWrite,
+		df.InvalidRegister,
+		df.ACCOverflowCount,
+		df.PACCOverflowCount,
+		df.LROverflowCount,
+		df.DACROverflowCount,
+		df.DACLOverflowCount)
+}
+
 type SINLFOState struct {
 	Angle float64
 }
@@ -47,9 +131,43 @@ type RAMPState struct {
 
 type RegisterBank map[int]*Register
 
+func NewState() *State {
+	s := new(State)
+	s.DebugFlags = new(DebugFlags)
+	s.Reset()
+	return s
+}
+
+func (s *State) CheckForOverflows() {
+	acc := s.ACC.ToFloat64()
+	if acc > 1.0 || acc < -1.0 {
+		s.DebugFlags.ACCOverflowCount += 1
+	}
+	pacc := s.PACC.ToFloat64()
+	if pacc > 1.0 || pacc < -1.0 {
+		s.DebugFlags.PACCOverflowCount += 1
+	}
+	lr := s.LR.ToFloat64()
+	if lr > 1.0 || lr < -1.0 {
+		s.DebugFlags.LROverflowCount += 1
+	}
+	dacl := s.GetRegister(base.DACL).ToFloat64()
+	if dacl > 1.0 || dacl < -1.0 {
+		s.DebugFlags.DACLOverflowCount += 1
+	}
+	dacr := s.GetRegister(base.DACR).ToFloat64()
+	if dacr > 1.0 || dacr < -1.0 {
+		s.DebugFlags.DACROverflowCount += 1
+	}
+}
+
 func (s *State) GetRegister(regNo int) *Register {
-	if validateRegisterNo(regNo) != nil {
-		panic(true)
+	err := validateRegisterNo(regNo)
+	if err != nil {
+		fmt.Printf("ERROR: %s\n", err)
+		s.DebugFlags.InvalidRegister = regNo
+		s.DebugFlags.Print()
+		panic("Invalid register number")
 	}
 
 	return s.Registers[regNo]
@@ -136,12 +254,8 @@ func (s *State) Reset() {
 	s.GetRegister(0x3D).Clear() // REG29,      (61)  Register 29
 	s.GetRegister(0x3E).Clear() // REG30,      (62)  Register 30
 	s.GetRegister(0x3F).Clear() // REG31,      (63)  Register 31
-}
 
-func NewState() *State {
-	s := new(State)
-	s.Reset()
-	return s
+	s.DebugFlags.Reset()
 }
 
 func validateRegisterNo(regNo int) error {
@@ -151,10 +265,5 @@ func validateRegisterNo(regNo int) error {
 		!(regNo >= 0x20 && regNo <= 0x3F) {
 		return fmt.Errorf("RegNo = %d (0x%x) is not in use\n", regNo, regNo)
 	}
-	/*
-		if regNo < 0 || regNo > 63 {
-			return fmt.Errorf("RegNo = %d (0x%x) is out of bounds\n", regNo, regNo)
-		}
-	*/
 	return nil
 }
