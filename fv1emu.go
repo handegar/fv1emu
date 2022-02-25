@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	wav "github.com/youpy/go-wav"
-
 	ui "github.com/gizak/termui/v3"
+	wav "github.com/youpy/go-wav"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/disasm"
@@ -116,11 +115,11 @@ func printWavStatistics(statistics *WavStatistics) {
 		color.Cyan("* NOTE: Right channel is completely silent.")
 	}
 	if statistics.Left.Clipped > 0 {
-		color.Red("* WARNING: Left channel has %d clipped samples.",
+		color.Red("* WARNING: Left channel had %d clipped samples.",
 			statistics.Left.Clipped)
 	}
 	if statistics.Right.Clipped > 0 {
-		color.Red("* WARNING: Right channel has %d clipped samples.",
+		color.Red("* WARNING: Right channel had %d clipped samples.",
 			statistics.Right.Clipped)
 	}
 
@@ -197,14 +196,6 @@ func main() {
 		disasm.PrintCodeListing(opCodes)
 	}
 
-	if settings.Debugger {
-		// Setting up TermUI
-		if err := ui.Init(); err != nil {
-			log.Fatalf("failed to initialize termui: %v", err)
-		}
-		defer ui.Close()
-	}
-
 	inWAVFile, _ := os.Open(settings.InputWav)
 	reader := wav.NewReader(inWAVFile)
 	defer inWAVFile.Close()
@@ -231,6 +222,13 @@ func main() {
 	var state *dsp.State = dsp.NewState()
 	sampleNum := 0
 
+	if settings.Debugger {
+		// Setting up TermUI
+		if err := ui.Init(); err != nil {
+			log.Fatalf("failed to initialize termui: %v", err)
+		}
+	}
+
 	var outSamples []wav.Sample
 	for {
 		samples, err := reader.ReadSamples()
@@ -238,6 +236,7 @@ func main() {
 			break
 		}
 
+		letsContinue := true
 		for _, sample := range samples {
 			var left float64 = reader.FloatValue(sample, 0)
 			var right float64 = left
@@ -250,35 +249,44 @@ func main() {
 				wav.Sample{[2]int{int(outLeft), int(outRight)}})
 
 			if !cont {
-				return
+				letsContinue = false
+				break
 			}
 
 			sampleNum += 1
 		}
+
+		if !letsContinue {
+			break
+		}
 	}
 
 	if settings.Debugger {
-		return
-	}
+		ui.Close()
+		color.Yellow("* No more samples to process.")
+	} else {
+		// Do trail-samples?
+		numSamples := len(outSamples)
+		numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
+		for i := 0; i < numTrailSamples; i++ {
+			outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes, i+numSamples)
+			updateWavStatistics(outLeft, outRight, &statistics)
+			outSamples = append(outSamples,
+				wav.Sample{[2]int{int(outLeft), int(outRight)}})
+		}
 
-	// Do trail-samples?
-	numSamples := len(outSamples)
-	numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
-	for i := 0; i < numTrailSamples; i++ {
-		outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes, i+numSamples)
-		updateWavStatistics(outLeft, outRight, &statistics)
-		outSamples = append(outSamples,
-			wav.Sample{[2]int{int(outLeft), int(outRight)}})
+		duration := time.Since(start)
+		fmt.Printf("   -> ..took %s (%d samples)\n", duration, len(outSamples))
 	}
-
-	duration := time.Since(start)
-	fmt.Printf("   -> ..took %s (%d samples)\n", duration, len(outSamples))
 
 	statistics.Left.Mean = statistics.Left.Mean / int(statistics.NumSamples)
 	statistics.Right.Mean = statistics.Right.Mean / int(statistics.NumSamples)
 
 	printWavStatistics(&statistics)
-	saveWavFile(wavFormat, outSamples)
+
+	if !settings.Debugger {
+		saveWavFile(wavFormat, outSamples)
+	}
 }
 
 // Returns an Int-pair (16bits signed)

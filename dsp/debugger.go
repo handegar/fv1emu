@@ -35,7 +35,7 @@ func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
 		// FIXME: Can we center this line? (20220225 handegar)
 		helpLine.Text =
 			"[ESC/q:](fg:black) Quit [|](bg:black) " +
-				"[F1/h:](fg:black) Help [|](bg:black) " +
+				"[F1/h/?:](fg:black) Help [|](bg:black) " +
 				"[s/PgDn:](fg:black) Next sample [|](bg:black) " +
 				"[n/Down:](fg:black) Next op "
 
@@ -48,9 +48,13 @@ func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
 
 func renderHelpScreen() {
 	width, height := termui.TerminalDimensions()
-	help := widgets.NewParagraph()
-	help.Title = "  Help / Keys  "
-	help.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	ypos := 0
+
+	frame := widgets.NewParagraph()
+	frame.Title = "  Help / Keys / Keywords "
+	frame.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	frame.SetRect(0, 0, width, height)
+	ypos += 1
 
 	keys := widgets.NewList()
 	keys.Border = false
@@ -58,17 +62,45 @@ func renderHelpScreen() {
 	keys.SetRect(1, 1, width-1, height-1)
 	keys.SelectedRowStyle = termui.NewStyle(termui.ColorCyan)
 
-	keys.Rows = append(keys.Rows, "Keys")
+	keys.Rows = append(keys.Rows, "Keys:")
+	keys.Rows = append(keys.Rows, " h, F1, ?:          [This help-page](fg:white)")
 	keys.Rows = append(keys.Rows, " ESC, q, CTRL-C:    [Quit debugger / exit help](fg:white)")
-	keys.Rows = append(keys.Rows, " s:                 [Next sample](fg:white)")
+	keys.Rows = append(keys.Rows, " s, PgDn:           [Next sample](fg:white)")
 	keys.Rows = append(keys.Rows, " SHIFT-s:           [Skip 100 samples](fg:white)")
 	keys.Rows = append(keys.Rows, " CTRL-s:            [Skip 1000 samples](fg:white)")
-	keys.Rows = append(keys.Rows, " n, DownKey, PgDn:  [Next instruction](fg:white)")
+	keys.Rows = append(keys.Rows, " g:                 [Skip 10000 samples](fg:white)")
+	keys.Rows = append(keys.Rows, " SHIFT-g:           [Skip 100.000 samples](fg:white)")
+	keys.Rows = append(keys.Rows, " n, DownKey:        [Next instruction](fg:white)")
+	keys.Rows = append(keys.Rows, " p, UpKey:          [Previous instruction (within current sample)](fg:white)")
 	keys.Rows = append(keys.Rows, " f:                 [Display register values as float or integers](fg:white)")
 
-	help.SetRect(0, 0, width, height)
-	ui.Render(help)
+	keys.SetRect(1, ypos, width-1, ypos+len(keys.Rows)+2)
+	ypos += len(keys.Rows) + 1
+
+	help := widgets.NewParagraph()
+	help.Border = false
+	help.Text = "[Keywords:](fg:cyan)\n" +
+		" [IP](fg:yellow):           Instruction pointer.\n" +
+		" [ACC](fg:yellow):          The Accumulator.\n" +
+		" [PACC](fg:yellow):         Accumulator from the previous sample/state.\n" +
+		" [LR](fg:yellow):           Last read sample read from the delay memory.\n" +
+		" [ADDR_PTR](fg:yellow):     Special memory-pointer register.\n" +
+		" [DelayRAMPtr](fg:yellow):  Decreasing memory pointer. Decreases by for one each sample.\n" +
+		"               Restarts as 32768 when reaching 0.\n" +
+		" [RF](fg:yellow):           Run flag, only false for the first sample, then always\n" +
+		"               true (0/1).\n" +
+		" [ADCL](fg:yellow):         Input value (left)\n" +
+		" [ADCR](fg:yellow):         Input value (right)\n" +
+		" [DACL](fg:yellow):         Output value (left)\n" +
+		" [DACR](fg:yellow):         Output value (right)\n" +
+		" [POT0-3](fg:yellow):       The current potentiometer values [0 .. 1.0]\n"
+
+	help.SetRect(1, ypos, width-1, ypos+(height-ypos)-12)
+	ypos += 12
+
+	ui.Render(frame)
 	ui.Render(keys)
+	ui.Render(help)
 }
 
 // Prints the code with a highlighted current-op
@@ -146,16 +178,20 @@ func updateStateView(state *State, sampleNum int) {
 	twidth, theight := termui.TerminalDimensions()
 	theight = theight - 1 // Save one for the keys line
 
+	rfInt := 0
+	if state.RUN_FLAG {
+		rfInt = 1
+	}
 	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:yellow,mod:bold) %d (%s)\n"+
 		"[PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
-		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RUN_FLAG:](fg:yellow) %t\n",
+		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RF:](fg:yellow) %d\n",
 		state.IP,
 		state.ACC.Value, overflowColored(state.ACC.ToFloat64(), -1.0, 1.0),
 		overflowColored(state.PACC.ToFloat64(), -1.0, 1.0),
 		overflowColored(state.LR.ToFloat64(), -1.0, 1.0),
 		state.Registers[base.ADDR_PTR].Value,
 		state.DelayRAMPtr,
-		state.RUN_FLAG)
+		rfInt)
 
 	ioStr := fmt.Sprintf("[ADCL:](fg:yellow) %f, [ADCR:](fg:yellow) %f\n"+
 		"[DACL:](fg:green) %s, [DACR:](fg:green) %s\n",
@@ -273,13 +309,19 @@ func WaitForDebuggerInput(state *State) string {
 			}
 		case "n", "<Down>":
 			return "next op"
+		case "p", "<Up>":
+			return "previous op"
 		case "s", "<PageDown>":
 			return "next sample"
 		case "S":
 			return "next 100 samples"
 		case "<C-s>":
 			return "next 1000 samples"
-		case "h", "<F1>":
+		case "g":
+			return "next 10000 samples"
+		case "G":
+			return "next 100000 samples"
+		case "h", "<F1>", "?":
 			showHelpScreen = !showHelpScreen
 			UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)
 		case "f":

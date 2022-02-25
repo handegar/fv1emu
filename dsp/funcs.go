@@ -21,6 +21,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	updateSinLFO(state)
 	updateRampLFO(state)
 
+	// Used to keep previous states within one sample for
+	// "rewinding" when debugging.
+	previousStates := make([]*State, len(opCodes))
+
 	for state.IP < uint(len(opCodes)) {
 		if int(state.IP) > len(opCodes) { // The program has ended.
 			break
@@ -35,6 +39,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 
 		// Print pre-op state
 		if settings.Debugger && skipNumSamples <= 0 {
+			// Append to the state-history for this sample
+			if previousStates[state.IP] == nil {
+				previousStates[state.IP] = state.Duplicate()
+			}
 			UpdateDebuggerScreen(opCodes, state, sampleNum)
 		}
 
@@ -57,6 +65,11 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 				return false
 			case "next op":
 				break
+			case "previous op":
+				if state.IP > 0 {
+					state.Copy(previousStates[state.IP-1])
+				}
+				continue
 			case "next sample":
 				skipNumSamples = 1
 				break
@@ -65,6 +78,12 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 				break
 			case "next 1000 samples":
 				skipNumSamples = 1000
+				break
+			case "next 10000 samples":
+				skipNumSamples = 10000
+				break
+			case "next 100000 samples":
+				skipNumSamples = 100000
 				break
 			}
 		}
