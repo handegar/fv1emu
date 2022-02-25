@@ -57,7 +57,17 @@ func parseCommandLineParameters() {
 	var allPotsToMax bool = false
 	flag.BoolVar(&allPotsToMax, "pmax", allPotsToMax, "Set all potentiometers to max")
 	var allPotsToMin bool = false
-	flag.BoolVar(&allPotsToMax, "pmin", allPotsToMax, "Set all potentiometers to min")
+	flag.BoolVar(&allPotsToMin, "pmin", allPotsToMin, "Set all potentiometers to min")
+
+	// Debug stuff
+	flag.BoolVar(&settings.CHO_RDAL_is_NA, "cho-rdal-is-NA", settings.CHO_RDAL_is_NA,
+		"DEBUG: The 'CHO RDAL' op will output the NA crossfade envelope for RMP0")
+	flag.BoolVar(&settings.CHO_RDAL_is_RPTR2, "cho-rdal-is-RPTR2", settings.CHO_RDAL_is_RPTR2,
+		"DEBUG: The 'CHO RDAL' op will output the RPTR2 envelope for RMP0")
+	flag.BoolVar(&settings.CHO_RDAL_is_COMPA, "cho-rdal-is-COMPA", settings.CHO_RDAL_is_COMPA,
+		"DEBUG: The 'CHO RDAL' op will output the COMPA envelope for SIN0/RMP0")
+	flag.BoolVar(&settings.CHO_RDAL_is_COS, "cho-rdal-is-COS", settings.CHO_RDAL_is_COS,
+		"DEBUG: The 'CHO RDAL' op will output the COS envelope for SIN0")
 
 	flag.Parse()
 
@@ -144,16 +154,18 @@ func main() {
 	fmt.Printf("* FV-1 emulator v%s\n", settings.Version)
 	parseCommandLineParameters()
 
-	if settings.Debugger {
-		// Setting up TermUI
-		if err := ui.Init(); err != nil {
-			log.Fatalf("failed to initialize termui: %v", err)
-		}
-		defer ui.Close()
-	}
-
 	if settings.InFilename == "" {
 		fmt.Println("No bin/hex file specified. Use the '-bin/-hex' parameter.")
+		return
+	}
+
+	if settings.InputWav == "" {
+		fmt.Println("No input WAV file specified. Use the '-in' parameter.")
+		return
+	}
+
+	if settings.OutputWav == "" {
+		fmt.Println("No output WAV file specified. Use the '-out' parameter.")
 		return
 	}
 
@@ -185,14 +197,12 @@ func main() {
 		disasm.PrintCodeListing(opCodes)
 	}
 
-	if settings.InputWav == "" {
-		fmt.Println("No input WAV file specified. Use the '-in' parameter.")
-		return
-	}
-
-	if settings.OutputWav == "" {
-		fmt.Println("No output WAV file specified. Use the '-out' parameter.")
-		return
+	if settings.Debugger {
+		// Setting up TermUI
+		if err := ui.Init(); err != nil {
+			log.Fatalf("failed to initialize termui: %v", err)
+		}
+		defer ui.Close()
 	}
 
 	inWAVFile, _ := os.Open(settings.InputWav)

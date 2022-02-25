@@ -13,7 +13,7 @@ func PrintCodeListing(opCodes []base.Op) {
 	fmt.Printf("\n;;\n;; Dissassembly (%d opcodes)\n;;\n", len(opCodes))
 	var skpTargets []int
 	for pos, opCode := range opCodes {
-		op := OpCodeToString(opCode, pos, true)
+		op := OpCodeToString(opCode, pos, settings.PrintDebug)
 		if opCode.Name == "SKP" {
 			skpTargets = append(skpTargets, pos+int(opCode.Args[1].RawValue))
 		}
@@ -25,7 +25,7 @@ func PrintCodeListing(opCodes []base.Op) {
 			}
 		}
 
-		fmt.Print(op)
+		fmt.Print(op + "\n")
 
 		if pos > settings.MaxNumberOfOps {
 			fmt.Printf(";; Max number of instructions reached (%d)\n",
@@ -121,7 +121,6 @@ func OpCodeToString(opcode base.Op, ip int, showParamData bool) string {
 			}
 			ret += fmt.Sprintf("#%d: %s0x%x (%dbit), ", i, binStr, v.RawValue, v.Len)
 		}
-
 		ret += "\n"
 	}
 

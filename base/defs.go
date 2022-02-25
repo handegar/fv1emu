@@ -35,6 +35,33 @@ const (
 	ADDR_PTR = 0x18
 )
 
+const (
+	SKP_NEG = 0x1
+	SKP_GEZ = 0x2
+	SKP_ZRO = 0x4
+	SKP_ZRC = 0x8
+	SKP_RUN = 0x10
+)
+
+const (
+	CHO_SIN   = 0x0
+	CHO_COS   = 0x1
+	CHO_REG   = 0x2
+	CHO_COMPC = 0x4
+	CHO_COMPA = 0x8
+	CHO_RPTR2 = 0x10
+	CHO_NA    = 0x20
+)
+
+const (
+	LFO_SIN0 = 0
+	LFO_SIN1 = 1
+	LFO_RMP0 = 2
+	LFO_RMP1 = 3
+	LFO_COS0 = 4
+	LFO_COS1 = 5
+)
+
 type OpArg struct {
 	Len      int // Length of argument (in bits)
 	Type     int

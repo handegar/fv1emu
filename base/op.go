@@ -127,14 +127,6 @@ var Symbols = map[int]string{
 	0x8000000:  "NEG",        // USED with 'SKP' instruction: Skip if ACC is Negative
 }
 
-const (
-	SKP_NEG = 0x1
-	SKP_GEZ = 0x2
-	SKP_ZRO = 0x4
-	SKP_ZRC = 0x8
-	SKP_RUN = 0x10
-)
-
 var SkpFlagSymbols = map[int]string{
 	SKP_NEG: "NEG",
 	SKP_GEZ: "GEZ",
@@ -142,16 +134,6 @@ var SkpFlagSymbols = map[int]string{
 	SKP_ZRC: "ZRC",
 	SKP_RUN: "RUN",
 }
-
-const (
-	CHO_SIN   = 0x0
-	CHO_COS   = 0x1
-	CHO_REG   = 0x2
-	CHO_COMPC = 0x4
-	CHO_COMPA = 0x8
-	CHO_RPTR2 = 0x10
-	CHO_NA    = 0x20
-)
 
 var ChoFlagSymbols = map[int]string{
 	CHO_SIN:   "SIN",

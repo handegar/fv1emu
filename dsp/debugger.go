@@ -16,29 +16,59 @@ var lastState *State
 var lastOpCodes []base.Op
 var lastSampleNum int
 var showRegistersAsFloats bool = true
+var showHelpScreen bool = false
 
 func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
 	lastState = state
 	lastOpCodes = opCodes
 	lastSampleNum = sampleNum
 
-	updateCodeView(opCodes, state)
-	updateStateView(state, sampleNum)
-	updateMetaInfoView(opCodes, state)
+	if showHelpScreen {
+		renderHelpScreen()
+	} else {
+		updateCodeView(opCodes, state)
+		updateStateView(state, sampleNum)
+		updateMetaInfoView(opCodes, state)
 
+		width, height := termui.TerminalDimensions()
+		helpLine := widgets.NewParagraph()
+		// FIXME: Can we center this line? (20220225 handegar)
+		helpLine.Text =
+			"[ESC/q:](fg:black) Quit [|](bg:black) " +
+				"[F1/h:](fg:black) Help [|](bg:black) " +
+				"[s/PgDn:](fg:black) Next sample [|](bg:black) " +
+				"[n/Down:](fg:black) Next op "
+
+		helpLine.Border = false
+		helpLine.TextStyle = termui.NewStyle(termui.ColorWhite, termui.ColorBlue)
+		helpLine.SetRect(0, height-1, width, height)
+		ui.Render(helpLine)
+	}
+}
+
+func renderHelpScreen() {
 	width, height := termui.TerminalDimensions()
-	helpLine := widgets.NewParagraph()
-	helpLine.Text =
-		"[ESC/q:](fg:black) Quit [|](bg:black) " +
-			"[s/PgDn:](fg:black) +1 sample [|](bg:black) " +
-			"[CTRL-s:](fg:black) +100 samples [|](bg:black) " +
-			"[n/Down:](fg:black) Next op [|](bg:black) " +
-			"[f:](fg:black) Floats/Ints "
+	help := widgets.NewParagraph()
+	help.Title = "  Help / Keys  "
+	help.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
 
-	helpLine.Border = false
-	helpLine.TextStyle = termui.NewStyle(termui.ColorWhite, termui.ColorBlue)
-	helpLine.SetRect(0, height-1, width, height)
-	ui.Render(helpLine)
+	keys := widgets.NewList()
+	keys.Border = false
+	keys.TextStyle = termui.NewStyle(termui.ColorYellow)
+	keys.SetRect(1, 1, width-1, height-1)
+	keys.SelectedRowStyle = termui.NewStyle(termui.ColorCyan)
+
+	keys.Rows = append(keys.Rows, "Keys")
+	keys.Rows = append(keys.Rows, " ESC, q, CTRL-C:    [Quit debugger / exit help](fg:white)")
+	keys.Rows = append(keys.Rows, " s:                 [Next sample](fg:white)")
+	keys.Rows = append(keys.Rows, " SHIFT-s:           [Skip 100 samples](fg:white)")
+	keys.Rows = append(keys.Rows, " CTRL-s:            [Skip 1000 samples](fg:white)")
+	keys.Rows = append(keys.Rows, " n, DownKey, PgDn:  [Next instruction](fg:white)")
+	keys.Rows = append(keys.Rows, " f:                 [Display register values as float or integers](fg:white)")
+
+	help.SetRect(0, 0, width, height)
+	ui.Render(help)
+	ui.Render(keys)
 }
 
 // Prints the code with a highlighted current-op
@@ -179,10 +209,10 @@ func updateStateView(state *State, sampleNum int) {
 	regStr := ""
 	for i := 0x20; i <= 0x3f; i += 2 {
 		if showRegistersAsFloats {
-			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %f  ",
-				i-0x20, state.Registers[i].ToFloat64())
-			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %f\n",
-				i-0x20+1, state.Registers[i+1].ToFloat64())
+			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %s  ",
+				i-0x20, overflowColored(state.Registers[i].ToFloat64(), 0, 1.0))
+			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %s\n",
+				i-0x20+1, overflowColored(state.Registers[i+1].ToFloat64(), 0, 1.0))
 		} else {
 			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %d  ",
 				i-0x20, state.Registers[i].ToInt32())
@@ -235,13 +265,23 @@ func WaitForDebuggerInput(state *State) string {
 	for e := range ui.PollEvents() {
 		switch e.ID {
 		case "q", "<C-c>", "<Escape>":
-			return "quit"
+			if showHelpScreen {
+				showHelpScreen = false
+				onTerminalResized()
+			} else {
+				return "quit"
+			}
 		case "n", "<Down>":
 			return "next op"
 		case "s", "<PageDown>":
 			return "next sample"
-		case "<C-s>":
+		case "S":
 			return "next 100 samples"
+		case "<C-s>":
+			return "next 1000 samples"
+		case "h", "<F1>":
+			showHelpScreen = !showHelpScreen
+			UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)
 		case "f":
 			showRegistersAsFloats = !showRegistersAsFloats
 			UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)

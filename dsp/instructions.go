@@ -1,11 +1,25 @@
 package dsp
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
 	"github.com/handegar/fv1emu/base"
+	"github.com/handegar/fv1emu/settings"
 )
+
+func isSinLFO(typ int) bool {
+	return typ == base.LFO_SIN0 || typ == base.LFO_SIN1 ||
+		typ == base.LFO_COS0 || typ == base.LFO_COS1
+}
+
+func assert(mustBeTrue bool, msg string) {
+	if !mustBeTrue {
+		fmt.Printf("ERROR: %s\n", msg)
+		panic("ASSERT failed")
+	}
+}
 
 var opTable = map[string]interface{}{
 	"LOG": func(op base.Op, state *State) error {
@@ -105,7 +119,6 @@ var opTable = map[string]interface{}{
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
-			fmt.Printf("RDA: %s\n", err)
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 		}
 
@@ -122,7 +135,6 @@ var opTable = map[string]interface{}{
 		addr := state.Registers[base.ADDR_PTR].Value >> 8               // ADDR_PTR
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
-			fmt.Printf("RMPA: %s\n", err)
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 		}
 
@@ -141,7 +153,6 @@ var opTable = map[string]interface{}{
 		// ACC->SRAM[ADDR], ACC * C
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
-			fmt.Printf("WRA: %s\n", err)
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
 		}
 
@@ -156,7 +167,6 @@ var opTable = map[string]interface{}{
 		// ACC->SRAM[ADDR], (ACC*C) + LR
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
-			fmt.Printf("WRAP: %s\n", err)
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
 		}
 
@@ -180,7 +190,15 @@ var opTable = map[string]interface{}{
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], C * ACC
-		state.GetRegister(regNo).Copy(state.ACC)
+		reg := state.GetRegister(regNo)
+		if regNo == base.RAMP0_RANGE || regNo == base.RAMP1_RANGE { // Special case?
+			reg.SetInt32(state.ACC.ToInt32() >> 14)
+		} else if regNo == base.RAMP0_RATE || regNo == base.RAMP1_RATE {
+			reg.SetInt32(state.ACC.ToInt32() >> 10)
+		} else { // Just a regular WRAX
+			reg.Copy(state.ACC)
+		}
+
 		state.ACC.Mult(state.workReg1_14)
 		return nil
 	},
@@ -279,11 +297,15 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"WLDR": func(op base.Op, state *State) error {
-		amp, valid := base.RampAmpValuesMap[op.Args[0].RawValue]
+		amp := base.RampAmpValues[op.Args[0].RawValue]
+		_, valid := base.RampAmpValuesMap[amp]
 		if !valid {
-			amp = 0
 			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+			amp = 4096
+			msg := fmt.Sprintf("Ramp amplitude value (%d) is not 512, 1024, 2048 or 4096", amp)
+			return errors.New(msg)
 		}
+
 		freq := op.Args[2].RawValue
 		// cap frequency value
 		if freq < -(1 << 14) { // -16384
@@ -319,68 +341,146 @@ var opTable = map[string]interface{}{
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
 
-		if (flags&base.CHO_COS) != 0 && (typ == 0 || typ == 1) {
+		if (flags & base.CHO_COS) != 0 {
+			if !isSinLFO(typ) {
+				return errors.New("Cannot use the COS flag with RAMP LFOs")
+			}
 			typ += 4 // Make SIN -> COS
 		}
 
 		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
-		if (flags&base.CHO_COMPA) != 0 && (typ == 0 || typ == 1) {
+		if (flags & base.CHO_COMPA) != 0 {
 			lfo = -lfo
 		}
-		scaledLFO := ScaleLFOValue(lfo, typ, state)
 
 		if (flags & base.CHO_RPTR2) != 0 {
-			// FIXME: Implement (20220206 handegar)
+			if isSinLFO(typ) {
+				return errors.New("Cannot use RPTR2 with SIN LFOs")
+			}
+			lfo = GetLFOValuePlusHalfCycle(typ, state)
 		}
 
-		delayIndex := addr + int(scaledLFO)
-		idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
-		if err != nil {
-			fmt.Printf("CHO RDA: %s\n", err)
-			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
-		}
+		scaledLFO := ScaleLFOValue(lfo, typ, state)
 
-		state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+		if (flags & base.CHO_NA) != 0 { // Shall we do the X-FADE?
+			if isSinLFO(typ) {
+				return errors.New("Cannot use the NA flag with SIN LFOs")
+			}
 
-		interpolate := (lfo + 1.0) / 2.0 // get 0...1.0
-		if (flags & base.CHO_COMPC) != 0 {
-			state.workRegB.SetFloat64(1.0 - interpolate)
+			xfade := GetXFadeFromLFO(lfo, typ, state)
+			if (flags & base.CHO_COMPC) != 0 {
+				xfade = 1.0 - xfade
+			}
+			state.workRegB.SetFloat64(xfade)
+
+			delayIndex := addr
+			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
+			if err != nil {
+				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
+			}
+			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+
+			state.workRegA.Mult(state.workRegB) // delayram*xfade
+			state.ACC.Add(state.workRegA)
 		} else {
-			state.workRegB.SetFloat64(interpolate)
-		}
-		state.workRegA.Mult(state.workRegB)
-		state.ACC.Add(state.workRegA)
+			delayIndex := addr + int(scaledLFO)
+			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
+			if err != nil {
+				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
+			}
 
-		if (flags & 0x20) != 0 { // NA
-			// FIXME: Handle the NA flag here (20220207 handegar)
+			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+
+			interpolate := lfo
+			if isSinLFO(typ) {
+				// LFO is [-1 .. 1]
+				interpolate = (lfo + 1.0) / 2.0 // get 0...1.0
+				assert(interpolate >= 0.0 && interpolate <= 1.0,
+					"interpolate is < 0 || > 1.0")
+			}
+
+			if (flags & base.CHO_COMPC) != 0 {
+				state.workRegB.SetFloat64(1.0 - interpolate)
+			} else {
+				state.workRegB.SetFloat64(interpolate)
+			}
+
+			state.workRegA.Mult(state.workRegB)
+			state.ACC.Add(state.workRegA)
 		}
+
 		return nil
 	},
 	"CHO SOF": func(op base.Op, state *State) error {
-		addr := int(op.Args[0].RawValue)
+		D := int32(op.Args[0].RawValue)
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
 
-		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
-
-		interpolate := (lfo / 2.0) + 0.5 // get 0...1.0
-		f := interpolate
-		if (flags & base.CHO_COMPC) != 0 {
-			f = 1.0 - interpolate
+		if (flags & base.CHO_COS) != 0 {
+			if !isSinLFO(typ) {
+				return errors.New("Cannot use the COS flag with RAMP LFOs")
+			}
+			typ += 4 // Make SIN -> COS
 		}
-		state.workRegB.SetFloat64(interpolate)
-		lfoScaled := ScaleLFOValue(f, typ, state)
-		state.workRegA.SetFloat64(lfoScaled)
 
-		state.workRegB.SetWithIntsAndFracs(int32(addr), 0, 15)
+		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
+		if (flags & base.CHO_COMPA) != 0 {
+			lfo = -lfo
+		}
+
+		if (flags & base.CHO_RPTR2) != 0 {
+			if isSinLFO(typ) {
+				return errors.New("Cannot use RPTR2 with SIN LFOs")
+			}
+			lfo = GetLFOValuePlusHalfCycle(typ, state)
+		}
+
+		if (flags & base.CHO_NA) != 0 { // Shall we do the X-FADE?
+			if isSinLFO(typ) {
+				return errors.New("Cannot use the NA flag with SIN LFOs")
+			}
+			xfade := GetXFadeFromLFO(lfo, typ, state)
+			if (flags & base.CHO_COMPC) != 0 {
+				xfade = 1.0 - xfade
+			}
+			scaledXFade := ScaleLFOValue(xfade, typ, state)
+			state.workRegA.SetFloat64(scaledXFade)
+		} else {
+			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			state.workRegA.SetFloat64(scaledLFO)
+		}
+
+		state.workRegB.SetWithIntsAndFracs(D, 0, 15)
 		state.ACC.Mult(state.workRegA).Add(state.workRegB)
 		return nil
 	},
 	"CHO RDAL": func(op base.Op, state *State) error {
 		typ := int(op.Args[1].RawValue)
 		lfo := GetLFOValue(typ, state, false)
-		lfoScaled := ScaleLFOValue(lfo, typ, state)
-		state.ACC.SetFloat64(lfoScaled)
+
+		if settings.CHO_RDAL_is_NA && !isSinLFO(typ) && typ == base.LFO_RMP0 {
+			// Used when debugging the NA envelope
+			xfade := GetXFadeFromLFO(lfo, typ, state)
+			scaledXFade := ScaleLFOValue(xfade, typ, state)
+			state.ACC.SetFloat64(scaledXFade)
+		} else if settings.CHO_RDAL_is_RPTR2 && !isSinLFO(typ) && typ == base.LFO_RMP0 {
+			// Used when debugging the RPTR2 envelope
+			lfo = GetLFOValuePlusHalfCycle(typ, state)
+			lfoScaled := ScaleLFOValue(lfo, typ, state)
+			state.ACC.SetFloat64(lfoScaled)
+		} else if settings.CHO_RDAL_is_COMPA && (typ == base.LFO_RMP0 || typ == base.LFO_SIN0) {
+			// Used when debugging the COMPA envelope
+			lfoScaled := -ScaleLFOValue(lfo, typ, state)
+			state.ACC.SetFloat64(lfoScaled)
+		} else if settings.CHO_RDAL_is_COS && typ == base.LFO_SIN0 {
+			// Used when debugging the COS envelope
+			lfo = GetLFOValue(typ+4, state, false)
+			lfoScaled := ScaleLFOValue(lfo, typ+4, state)
+			state.ACC.SetFloat64(lfoScaled)
+		} else {
+			lfoScaled := ScaleLFOValue(lfo, typ, state)
+			state.ACC.SetFloat64(lfoScaled)
+		}
 		return nil
 	},
 }

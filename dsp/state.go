@@ -3,6 +3,7 @@ package dsp
 import (
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
@@ -77,12 +78,23 @@ func (df *DebugFlags) SetRampLFOFlag(lfoNum int32) {
 
 func (df *DebugFlags) IncreaseOutOfBoundsMemoryRead() error {
 	df.OutOfBoundsMemoryRead += 1
-	return errors.New("Out-of-bounds memory read")
+
+	msg := "Out-of-bounds memory read: "
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		msg += fmt.Sprintf("%s:%d", file, no)
+	}
+	return errors.New(msg)
 }
 
 func (df *DebugFlags) IncreaseOutOfBoundsMemoryWrite() error {
 	df.OutOfBoundsMemoryWrite += 1
-	return errors.New("Out-of-bounds memory write")
+	msg := "Out-of-bounds memory write: "
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		msg += fmt.Sprintf("%s:%d", file, no)
+	}
+	return errors.New(msg)
 }
 
 func (df *DebugFlags) Reset() {
@@ -138,6 +150,7 @@ type SINLFOState struct {
 
 type RAMPState struct {
 	Value float64
+	count int // Used internally to calculate the saw-tooth.
 }
 
 type RegisterBank map[int]*Register
