@@ -21,6 +21,13 @@ func assert(mustBeTrue bool, msg string) {
 	}
 }
 
+func assertFloat64(mustBeTrue bool, val float64, msg string) {
+	if !mustBeTrue {
+		fmt.Printf("ERROR: %s.\n       Value was %f.\n", msg, val)
+		panic("ASSERT failed")
+	}
+}
+
 var opTable = map[string]interface{}{
 	"LOG": func(op base.Op, state *State) error {
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 14) // C
@@ -30,9 +37,13 @@ var opTable = map[string]interface{}{
 		// SpinCAD and Igor's Dissasembler2 interpret this as
 		// a S.10 float. The SpinCAD source even has a comment
 		// which says "SpinASM compatibility", Both seems to work, though.
-		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) //4, 6) // D
+		// UPDATE: According to this post the manual might
+		// contain an error:
+		// http://www.spinsemi.com/forum/viewtopic.php?f=3&t=511
+		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
 		// C*LOG(|ACC|) + D
+		state.PACC.Copy(state.ACC)
 		acc := state.ACC.Abs().ToFloat64()
 		if acc <= 0.0 {
 			acc = 1.0 / (1 << 23)
@@ -49,6 +60,7 @@ var opTable = map[string]interface{}{
 		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
 		// C*exp(ACC) + D
+		state.PACC.Copy(state.ACC)
 		acc := state.ACC.ToFloat64()
 		if acc >= 0.0 {
 			state.ACC.SetFloat64(0.9999998807907104).Mult(state.workReg1_14).Add(state.workReg0_10)
@@ -63,27 +75,33 @@ var opTable = map[string]interface{}{
 		state.workReg0_10.SetWithIntsAndFracs(op.Args[0].RawValue, 0, 10) // D
 
 		// C * ACC + D
+		state.PACC.Copy(state.ACC)
 		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.workReg0_10)
 		state.ACC.Copy(state.workRegA)
 		return nil
 	},
 	"AND": func(op base.Op, state *State) error {
+		state.PACC.Copy(state.ACC)
 		state.ACC.And(op.Args[1].RawValue)
 		return nil
 	},
 	"CLR": func(op base.Op, state *State) error {
+		state.PACC.Copy(state.ACC)
 		state.ACC.Clear()
 		return nil
 	},
 	"OR": func(op base.Op, state *State) error {
+		// FIXME: PACC not updated?x (20220305 handegar)
 		state.ACC.Or(op.Args[1].RawValue)
 		return nil
 	},
 	"XOR": func(op base.Op, state *State) error {
+		state.PACC.Copy(state.ACC)
 		state.ACC.Xor(op.Args[1].RawValue)
 		return nil
 	},
 	"NOT": func(op base.Op, state *State) error {
+		state.PACC.Copy(state.ACC)
 		state.ACC.Not(op.Args[1].RawValue)
 		return nil
 	},
@@ -126,6 +144,7 @@ var opTable = map[string]interface{}{
 		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
 
 		// SRAM[ADDR] * C + ACC
+		state.PACC.Copy(state.ACC)
 		state.workRegA.Copy(state.LR).Mult(state.workReg1_9)
 		state.ACC.Add(state.workRegA)
 		return nil
@@ -142,6 +161,7 @@ var opTable = map[string]interface{}{
 		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
 
 		// SRAM[PNTR[N]] * C + ACC
+		state.PACC.Copy(state.ACC)
 		state.workRegA.Copy(state.LR).Mult(state.workReg1_9)
 		state.ACC.Add(state.workRegA)
 		return nil
@@ -151,6 +171,7 @@ var opTable = map[string]interface{}{
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 
 		// ACC->SRAM[ADDR], ACC * C
+		state.PACC.Copy(state.ACC)
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
@@ -165,6 +186,7 @@ var opTable = map[string]interface{}{
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
 
 		// ACC->SRAM[ADDR], (ACC*C) + LR
+		state.PACC.Copy(state.ACC)
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
@@ -181,6 +203,7 @@ var opTable = map[string]interface{}{
 		reg := state.GetRegister(regNo)
 
 		// (C * REG) + ACC
+		state.PACC.Copy(state.ACC)
 		state.workRegA.Copy(reg).Mult(state.workReg1_14)
 		state.ACC.Add(state.workRegA)
 		return nil
@@ -190,11 +213,25 @@ var opTable = map[string]interface{}{
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], C * ACC
+		state.PACC.Copy(state.ACC)
 		reg := state.GetRegister(regNo)
-		if regNo == base.RAMP0_RANGE || regNo == base.RAMP1_RANGE { // Special case?
-			reg.SetInt32(state.ACC.ToInt32() >> 14)
+
+		// Special handling for LFO registers
+		accAsInt := state.ACC.ToInt32()
+		if regNo == base.RAMP0_RANGE || regNo == base.RAMP1_RANGE {
+			reg.SetInt32(accAsInt >> (24 - 11 - 1))
+		} else if regNo == base.SIN0_RANGE || regNo == base.SIN1_RANGE {
+			reg.SetInt32(accAsInt >> (24 - 15 - 1))
 		} else if regNo == base.RAMP0_RATE || regNo == base.RAMP1_RATE {
-			reg.SetInt32(state.ACC.ToInt32() >> 10)
+			if accAsInt < 0 { // Don't allow a negative rate/freq
+				accAsInt = 0
+			}
+			reg.SetInt32(accAsInt >> (24 - 14))
+		} else if regNo == base.SIN0_RATE || regNo == base.SIN1_RATE {
+			if accAsInt < 0 { // Don't allow a negative rate/freq
+				accAsInt = 0
+			}
+			reg.SetInt32(accAsInt >> (24 - 14))
 		} else { // Just a regular WRAX
 			reg.Copy(state.ACC)
 		}
@@ -207,6 +244,7 @@ var opTable = map[string]interface{}{
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// MAX(|REG[ADDR] * C|, |ACC| )
+		state.PACC.Copy(state.ACC)
 		reg := state.GetRegister(regNo)
 		state.workRegA.Copy(reg).Mult(state.workReg1_14)
 		state.workRegB.Copy(state.ACC).Abs()
@@ -218,10 +256,12 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"ABSA": func(op base.Op, state *State) error {
+		state.PACC.Copy(state.ACC)
 		state.ACC.Abs()
 		return nil
 	},
 	"MULX": func(op base.Op, state *State) error {
+		state.PACC.Copy(state.ACC)
 		regNo := int(op.Args[0].RawValue)
 		reg := state.GetRegister(regNo)
 		state.ACC.Mult(reg)
@@ -233,6 +273,7 @@ var opTable = map[string]interface{}{
 		reg := state.GetRegister(regNo)
 
 		// (ACC - REG)*C + REG
+		state.PACC.Copy(state.ACC)
 		state.workRegA.Copy(state.ACC)
 		state.workRegA.Sub(reg).Mult(state.workReg1_14).Add(reg)
 		state.ACC.Copy(state.workRegA)
@@ -249,9 +290,11 @@ var opTable = map[string]interface{}{
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], (PACC-ACC)*C + PACC
+		state.workRegB.Copy(state.ACC)
 		state.GetRegister(regNo).Copy(state.ACC)
 		state.workRegA.Copy(state.PACC).Sub(state.ACC).Mult(state.workReg1_14).Add(state.PACC)
 		state.ACC.Copy(state.workRegA)
+		state.PACC.Copy(state.workRegB)
 		return nil
 	},
 	"WRHX": func(op base.Op, state *State) error {
@@ -259,9 +302,11 @@ var opTable = map[string]interface{}{
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
 
 		// ACC->REG[ADDR], (ACC*C)+PACC
+		state.workRegB.Copy(state.ACC)
 		state.GetRegister(regNo).Copy(state.ACC)
 		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.PACC)
 		state.ACC.Copy(state.workRegA)
+		state.PACC.Copy(state.workRegB)
 		return nil
 	},
 	"WLDS": func(op base.Op, state *State) error {
@@ -272,16 +317,16 @@ var opTable = map[string]interface{}{
 		if freq < 0 {
 			freq = 0
 			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
-		} else if freq > 511 {
-			freq = 511
+		} else if freq > ((1 << 9) - 1) {
+			freq = (1 << 9) - 1
 			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
 		}
 
 		if amp < 0 {
 			amp = 0
 			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
-		} else if amp > (1 << 15) { // 32768
-			amp = (1 << 15) - 1
+		} else if amp > ((1 << 16) - 1) { // 32768
+			amp = (1 << 16) - 1
 			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
 		}
 
@@ -294,6 +339,7 @@ var opTable = map[string]interface{}{
 			state.GetRegister(base.SIN1_RANGE).SetInt32(amp)
 			state.Sin1State.Angle = 0.0
 		}
+
 		return nil
 	},
 	"WLDR": func(op base.Op, state *State) error {
@@ -302,7 +348,8 @@ var opTable = map[string]interface{}{
 		if !valid {
 			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
 			amp = 4096
-			msg := fmt.Sprintf("Ramp amplitude value (%d) is not 512, 1024, 2048 or 4096", amp)
+			msg := fmt.Sprintf("Ramp amplitude value (%d) is not "+
+				"512, 1024, 2048 or 4096", amp)
 			return errors.New(msg)
 		}
 
@@ -311,7 +358,7 @@ var opTable = map[string]interface{}{
 		if freq < -(1 << 14) { // -16384
 			freq = -(1 << 14) + 1
 			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
-		} else if freq > (1 << 15) { // 32768
+		} else if freq > ((1 << 15) - 1) { // 32768
 			freq = (1 << 15) - 1
 			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
 		}
@@ -337,6 +384,11 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"CHO RDA": func(op base.Op, state *State) error {
+		/*
+		   LFO related post:
+		   http://www.spinsemi.com/forum/viewtopic.php?f=3&t=505
+		*/
+
 		addr := int(op.Args[0].RawValue)
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
@@ -348,10 +400,7 @@ var opTable = map[string]interface{}{
 			typ += 4 // Make SIN -> COS
 		}
 
-		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
-		if (flags & base.CHO_COMPA) != 0 {
-			lfo = -lfo
-		}
+		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
 
 		if (flags & base.CHO_RPTR2) != 0 {
 			if isSinLFO(typ) {
@@ -360,7 +409,12 @@ var opTable = map[string]interface{}{
 			lfo = GetLFOValuePlusHalfCycle(typ, state)
 		}
 
-		scaledLFO := ScaleLFOValue(lfo, typ, state)
+		if (flags&base.CHO_COMPA) != 0 && isSinLFO(typ) {
+			lfo = -lfo
+		} else if (flags&base.CHO_COMPA) != 0 && !isSinLFO(typ) {
+			lfoRange := GetRampRange(typ, state) / 4096.0
+			lfo = lfoRange - lfo
+		}
 
 		if (flags & base.CHO_NA) != 0 { // Shall we do the X-FADE?
 			if isSinLFO(typ) {
@@ -368,36 +422,50 @@ var opTable = map[string]interface{}{
 			}
 
 			xfade := GetXFadeFromLFO(lfo, typ, state)
+			// FIXME: Can we COMPA with NA? (20220309 handegar)
+			/*
+				if (flags & base.CHO_COMPA) != 0 {
+					xfade = -xfade
+				}
+			*/
 			if (flags & base.CHO_COMPC) != 0 {
 				xfade = 1.0 - xfade
 			}
 			state.workRegB.SetFloat64(xfade)
 
-			delayIndex := addr
+			delayIndex := addr + int(ScaleLFOValue(lfo, typ, state))
 			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 			if err != nil {
 				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 			}
 			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 
-			state.workRegA.Mult(state.workRegB) // delayram*xfade
-			state.ACC.Add(state.workRegA)
+			state.ACC.Add(state.workRegA.Mult(state.workRegB))
 		} else {
-			delayIndex := addr + int(scaledLFO)
+
+			delayIndex := addr + int(ScaleLFOValue(lfo, typ, state))
 			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 			if err != nil {
 				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 			}
 
 			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+
+			/*
+				// Re-get LFO value for interpolation if RPTR2 was used
+				if (flags & base.CHO_RPTR2) != 0 {
+					lfo = GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
+				}
+			*/
 
 			interpolate := lfo
 			if isSinLFO(typ) {
 				// LFO is [-1 .. 1]
 				interpolate = (lfo + 1.0) / 2.0 // get 0...1.0
-				assert(interpolate >= 0.0 && interpolate <= 1.0,
-					"interpolate is < 0 || > 1.0")
 			}
+
+			assert(interpolate >= 0.0 && interpolate <= 1.0,
+				"interpolate is < 0 || > 1.0")
 
 			if (flags & base.CHO_COMPC) != 0 {
 				state.workRegB.SetFloat64(1.0 - interpolate)
@@ -416,6 +484,8 @@ var opTable = map[string]interface{}{
 		typ := int(op.Args[1].RawValue)
 		flags := int(op.Args[3].RawValue)
 
+		state.workRegB.SetWithIntsAndFracs(D, 0, 15)
+
 		if (flags & base.CHO_COS) != 0 {
 			if !isSinLFO(typ) {
 				return errors.New("Cannot use the COS flag with RAMP LFOs")
@@ -423,9 +493,13 @@ var opTable = map[string]interface{}{
 			typ += 4 // Make SIN -> COS
 		}
 
-		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) == 0)
-		if (flags & base.CHO_COMPA) != 0 {
+		lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
+
+		if (flags&base.CHO_COMPA) != 0 && isSinLFO(typ) {
 			lfo = -lfo
+		} else if (flags&base.CHO_COMPA) != 0 && !isSinLFO(typ) {
+			lfoRange := GetRampRange(typ, state) / 4096.0
+			lfo = lfoRange - lfo
 		}
 
 		if (flags & base.CHO_RPTR2) != 0 {
@@ -440,47 +514,56 @@ var opTable = map[string]interface{}{
 				return errors.New("Cannot use the NA flag with SIN LFOs")
 			}
 			xfade := GetXFadeFromLFO(lfo, typ, state)
+			//fmt.Printf("lfo=%f, xfade=%f (reg=%t)\n", lfo, xfade, (flags&base.CHO_REG) != 0)
+
 			if (flags & base.CHO_COMPC) != 0 {
 				xfade = 1.0 - xfade
 			}
-			scaledXFade := ScaleLFOValue(xfade, typ, state)
-			state.workRegA.SetFloat64(scaledXFade)
+			state.workRegA.SetFloat64(xfade)
 		} else {
+			if (flags & base.CHO_COMPC) != 0 {
+				lfo = 1.0 - lfo
+			}
 			scaledLFO := ScaleLFOValue(lfo, typ, state)
-			state.workRegA.SetFloat64(scaledLFO)
+			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+			state.workRegA.SetFloat64(normLFO)
 		}
 
-		state.workRegB.SetWithIntsAndFracs(D, 0, 15)
 		state.ACC.Mult(state.workRegA).Add(state.workRegB)
 		return nil
 	},
 	"CHO RDAL": func(op base.Op, state *State) error {
 		typ := int(op.Args[1].RawValue)
-		lfo := GetLFOValue(typ, state, false)
+		lfo := GetLFOValue(typ, state, true)
 
 		if settings.CHO_RDAL_is_NA && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 			// Used when debugging the NA envelope
 			xfade := GetXFadeFromLFO(lfo, typ, state)
 			scaledXFade := ScaleLFOValue(xfade, typ, state)
-			state.ACC.SetFloat64(scaledXFade)
+			normXFade := NormalizeLFOValue(scaledXFade, typ, state)
+			state.ACC.SetFloat64(normXFade)
 		} else if settings.CHO_RDAL_is_RPTR2 && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 			// Used when debugging the RPTR2 envelope
 			lfo = GetLFOValuePlusHalfCycle(typ, state)
-			lfoScaled := ScaleLFOValue(lfo, typ, state)
-			state.ACC.SetFloat64(lfoScaled)
+			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+			state.ACC.SetFloat64(normLFO)
 		} else if settings.CHO_RDAL_is_COMPA && (typ == base.LFO_RMP0 || typ == base.LFO_SIN0) {
 			// Used when debugging the COMPA envelope
-			lfoScaled := -ScaleLFOValue(lfo, typ, state)
-			state.ACC.SetFloat64(lfoScaled)
+			scaledLFO := -ScaleLFOValue(lfo, typ, state)
+			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+			state.ACC.SetFloat64(normLFO)
 		} else if settings.CHO_RDAL_is_COS && typ == base.LFO_SIN0 {
 			// Used when debugging the COS envelope
 			lfo = GetLFOValue(typ+4, state, false)
 			lfoScaled := ScaleLFOValue(lfo, typ+4, state)
 			state.ACC.SetFloat64(lfoScaled)
 		} else {
-			lfoScaled := ScaleLFOValue(lfo, typ, state)
-			state.ACC.SetFloat64(lfoScaled)
+			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+			state.ACC.SetFloat64(normLFO)
 		}
+
 		return nil
 	},
 }

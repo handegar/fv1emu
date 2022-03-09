@@ -1,7 +1,6 @@
 package dsp
 
 import (
-	"errors"
 	"fmt"
 	"math"
 
@@ -13,13 +12,12 @@ import (
 
 var skipNumSamples int = 0
 
+func SkipToSampleNumber(num int) {
+	skipNumSamples = num
+}
+
 func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	state.IP = 0
-
-	// FIXME: Update LFO each sample for now to keep thinks
-	// simple. (20220222 handegar)
-	updateSinLFO(state)
-	updateRampLFO(state)
 
 	// Used to keep previous states within one sample for
 	// "rewinding" when debugging.
@@ -30,12 +28,13 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 			break
 		}
 
-		op := opCodes[state.IP]
+		// FIXME: The LFO should probably be updated in sync
+		// with an external clock, not per
+		// instruction. (20220227 handegar)
+		updateSinLFO(state)
+		updateRampLFO(state)
 
-		// FIXME: We should update the LFO at every cycle, not
-		// just every sample. This is how the FV-1 does
-		// it. (20220222 handegar)
-		//updateLFOStates(state)
+		op := opCodes[state.IP]
 
 		// Print pre-op state
 		if settings.Debugger && skipNumSamples <= 0 {
@@ -95,10 +94,8 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	}
 
 	state.RUN_FLAG = true
-	state.PACC.Copy(state.ACC)
-
 	// FIXME: Should we clear ACC? (20220222 handegar)
-	//state.ACC.Clear()
+	state.ACC.Clear()
 
 	state.DelayRAMPtr -= 1
 	if state.DelayRAMPtr <= -32768 {
@@ -115,18 +112,12 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 	// update the LFOs for remaining cycles to ensure that we stay
 	// close to how the FV-1 operates (and sounds).
 	//
-	// FIXME: This could probably be done with one operation
-	// instead of a loop. (20220225 handegar)
-	// FIXME: This does not work until I get the "LFO update each
-	// cycle" working. Now it will just make the LFO go way faster
-	// than expected. (20220225 handegar)
-	/*
-		remainingCycles := 128 - len(opCodes)
-		for i := 0; i < remainingCycles; i++ {
-			updateSinLFO(state)
-			updateRampLFO(state)
-		}
-	*/
+	remainingCycles := settings.InstructionsPerSample - len(opCodes)
+	for i := 0; i < remainingCycles; i++ {
+		updateSinLFO(state)
+		updateRampLFO(state)
+	}
+
 	return true // Lets continue!
 }
 
@@ -136,31 +127,32 @@ func updateSinLFO(state *State) {
 	sin1Freq := 0.5 + (state.Registers[base.SIN1_RATE].ToFloat64() * (20 - 0.5))
 
 	// Update Sine-LFOs
-	sin0delta := (2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate
+	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) /
+		float64(settings.InstructionsPerSample)
 	state.Sin0State.Angle += sin0delta
 
-	sin1delta := (2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate
+	sin1delta := ((2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate) /
+		float64(settings.InstructionsPerSample)
 	state.Sin1State.Angle += sin1delta
 }
 
 //
-// NB: This generates a sawtooth of [0 .. 1.0]. FV-1 uses [0 .. 0.5]
-// so this value needs to be scaled when needed.
+// This generates a sawtooth of [0 .. 1.0].
 //
 func updateRampLFO(state *State) {
-	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32())
+	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32() + 1)
 	range0 := float64(state.Registers[base.RAMP0_RANGE].ToInt32())
-	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32())
+	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32() + 1)
 	range1 := float64(state.Registers[base.RAMP1_RANGE].ToInt32())
 
 	if rate0 != 0 {
 		fcount := float64(state.Ramp0State.count)
-		state.Ramp0State.Value = ((fcount * (range0 / rate0)) / (range0 + 1))
+		state.Ramp0State.Value = (fcount * (range0 / rate0)) / (range0 + 1)
 	}
 
 	if rate1 != 0 {
 		fcount := float64(state.Ramp1State.count)
-		state.Ramp1State.Value = ((fcount * (range1 / rate1)) / (range1 + 1))
+		state.Ramp1State.Value = (fcount * (range1 / rate1)) / (range1 + 1)
 	}
 
 	for state.Ramp0State.Value > 1.0 {
@@ -174,11 +166,12 @@ func updateRampLFO(state *State) {
 	state.Ramp0State.count += 1
 	state.Ramp1State.count += 1
 	if float64(state.Ramp0State.count) > rate0 {
-		state.Ramp0State.count = 0
+		state.Ramp0State.count = state.Ramp0State.count - int(rate0)
 	}
 	if float64(state.Ramp1State.count) > rate1 {
-		state.Ramp1State.count = 0
+		state.Ramp1State.count = state.Ramp1State.count - int(rate1)
 	}
+
 }
 
 /**
@@ -193,18 +186,26 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	// Save the original RAMP state
 	rmp0count := state.Ramp0State.count
 	rmp1count := state.Ramp1State.count
-	rmp0Value := state.Ramp0State.Value
-	rmp1Value := state.Ramp1State.Value
+	rmp0value := state.Ramp0State.Value
+	rmp1value := state.Ramp1State.Value
 	lfo := 0.0
 
 	if lfoType == base.LFO_RMP0 {
 		rate0 := state.Registers[base.RAMP0_RATE].ToInt32()
 		state.Ramp0State.count += int(rate0 >> 1)
+		if state.Ramp0State.count > int(rate0) {
+			state.Ramp0State.count = state.Ramp0State.count - int(rate0)
+		}
+
 		updateRampLFO(state)
 		lfo = state.Ramp0State.Value
 	} else {
 		rate1 := state.Registers[base.RAMP1_RATE].ToInt32()
 		state.Ramp1State.count += int(rate1 >> 1)
+		if state.Ramp1State.count > int(rate1) {
+			state.Ramp1State.count = state.Ramp1State.count - int(rate1)
+		}
+
 		updateRampLFO(state)
 		lfo = state.Ramp1State.Value
 	}
@@ -212,8 +213,8 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	// Restore the state
 	state.Ramp0State.count = rmp0count
 	state.Ramp1State.count = rmp1count
-	state.Ramp0State.Value = rmp0Value
-	state.Ramp1State.Value = rmp1Value
+	state.Ramp0State.Value = rmp0value
+	state.Ramp1State.Value = rmp1value
 
 	assert(lfo < 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1]")
 	return lfo
@@ -226,31 +227,54 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32()) / (1 << 23)
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32()) // / float64((1<<16)-1)
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) / (1 << 23)
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) // / float64((1<<16)-1)
 	case base.LFO_RMP0:
-		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32()) / (1 << 10)
+		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32())
 	case base.LFO_RMP1:
-		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32()) / (1 << 10)
+		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32())
 	}
 
 	return value * amp
 }
 
 /**
+  Will "normalize" the LFO value to a number between [-1 .. 1]
+*/
+func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
+	ret := 0.0
+	switch lfoType {
+	case base.LFO_SIN0, base.LFO_COS0:
+		ret = value / float64((1<<16)-1)
+	case base.LFO_SIN1, base.LFO_COS1:
+		ret = value / float64((1<<16)-1)
+	case base.LFO_RMP0:
+		ret = value / float64((1<<11)-1)
+	case base.LFO_RMP1:
+		ret = value / float64((1<<11)-1)
+	}
+
+	return ret
+}
+
+/**
   Return the normalized LFO value
   ie. a value from  <-1.0 .. 1.0>
 */
-func GetLFOValue(lfoType int, state *State, retrieveOnly bool) float64 {
+func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	lfo := 0.0
 
-	if retrieveOnly {
+	if !storeValue {
 		switch lfoType {
-		case base.LFO_SIN0, base.LFO_SIN1, base.LFO_COS0, base.LFO_COS1:
-			return state.sinLFOReg.ToFloat64()
-		case base.LFO_RMP0, base.LFO_RMP1:
-			return state.rampLFOReg.ToFloat64()
+		case base.LFO_SIN0, base.LFO_COS0:
+			return state.sin0LFOReg.ToFloat64()
+		case base.LFO_SIN1, base.LFO_COS1:
+			return state.sin1LFOReg.ToFloat64()
+		case base.LFO_RMP0:
+			return state.ramp0LFOReg.ToFloat64()
+		case base.LFO_RMP1:
+			return state.ramp1LFOReg.ToFloat64()
 		default:
 			panic("Invalid LFO index")
 		}
@@ -259,27 +283,48 @@ func GetLFOValue(lfoType int, state *State, retrieveOnly bool) float64 {
 	switch lfoType {
 	case base.LFO_SIN0:
 		lfo = math.Sin(state.Sin0State.Angle)
-		state.sinLFOReg.SetFloat64(lfo)
+		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_SIN1:
 		lfo = math.Sin(state.Sin1State.Angle)
-		state.sinLFOReg.SetFloat64(lfo)
-	case base.LFO_RMP0:
-		lfo = state.Ramp0State.Value
-		state.rampLFOReg.SetFloat64(lfo)
-	case base.LFO_RMP1:
-		lfo = state.Ramp1State.Value
-		state.rampLFOReg.SetFloat64(lfo)
+		state.sin1LFOReg.SetFloat64(lfo)
 	case base.LFO_COS0:
 		lfo = math.Cos(state.Sin0State.Angle)
-		state.sinLFOReg.SetFloat64(lfo)
+		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_COS1:
 		lfo = math.Cos(state.Sin1State.Angle)
-		state.sinLFOReg.SetFloat64(lfo)
+		state.sin1LFOReg.SetFloat64(lfo)
+	case base.LFO_RMP0:
+		lfo = state.Ramp0State.Value
+		assertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo, "LFO Ramp0 range outside [-1 .. 1]")
+		state.ramp0LFOReg.SetFloat64(lfo)
+	case base.LFO_RMP1:
+		lfo = state.Ramp1State.Value
+		assertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo, "LFO Ramp1 range outside [-1 .. 1]")
+		state.ramp1LFOReg.SetFloat64(lfo)
+
 	default:
 		panic("Unknown LFO type")
 	}
 
-	assert(lfo <= 1.0 && lfo >= -1.0, "LFO range outside [-1 .. 1]")
+	//fmt.Printf("LFO=%f-.------- %d\n", lfo, state.Ramp0State.count)
+
+	// Debugging
+	if lfoType == base.LFO_SIN0 {
+		state.DebugFlags.Sin0Max = math.Max(state.DebugFlags.Sin0Max, lfo)
+		state.DebugFlags.Sin0Min = math.Min(state.DebugFlags.Sin0Min, lfo)
+
+	} else if lfoType == base.LFO_SIN1 {
+		state.DebugFlags.Sin1Max = math.Max(state.DebugFlags.Sin1Max, lfo)
+		state.DebugFlags.Sin1Min = math.Min(state.DebugFlags.Sin1Min, lfo)
+	} else if lfoType == base.LFO_SIN1 {
+		state.DebugFlags.Ramp0Max = math.Max(state.DebugFlags.Ramp0Max, lfo)
+		state.DebugFlags.Ramp0Min = math.Min(state.DebugFlags.Ramp0Min, lfo)
+
+	} else if lfoType == base.LFO_SIN1 {
+		state.DebugFlags.Ramp1Max = math.Max(state.DebugFlags.Ramp1Max, lfo)
+		state.DebugFlags.Ramp1Min = math.Min(state.DebugFlags.Ramp1Min, lfo)
+	}
+
 	return lfo
 }
 
@@ -322,15 +367,38 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 		val = 0.0
 	}
 
+	/*
+		fmt.Printf("XFade: lfo=%f -> val=%f (%f, %f, %f, %f)\n",
+			lfo, val, startPhase, risePhase, restPhase, sinkPhase)
+	*/
+	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
+	state.DebugFlags.XFadeMin = math.Min(state.DebugFlags.XFadeMin, val)
+
 	return val
+}
+
+func GetRampRange(typ int, state *State) float64 {
+	if typ == base.LFO_RMP0 {
+		return float64(state.Registers[base.RAMP0_RANGE].ToInt32())
+	} else if typ == base.LFO_RMP1 {
+		return float64(state.Registers[base.RAMP1_RANGE].ToInt32())
+	}
+
+	panic("Only RAMPx types allowed")
+	return 0.0
 }
 
 // Ensure the DelayRAM index is within bounds
 func capDelayRAMIndex(in int, state *State) (int, error) {
 	var err error = nil
-	if in > DELAY_RAM_SIZE {
-		err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (len=%d)",
-			in, DELAY_RAM_SIZE))
+	/*
+		if in > DELAY_RAM_SIZE {
+			err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (len=%d)",
+				in, DELAY_RAM_SIZE))
+		}
+	*/
+	for in > DELAY_RAM_SIZE {
+		in = in - DELAY_RAM_SIZE
 	}
 
 	return in & 0x7fff, err

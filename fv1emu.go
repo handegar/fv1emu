@@ -3,30 +3,32 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"math"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/fatih/color"
 	ui "github.com/gizak/termui/v3"
-	wav "github.com/youpy/go-wav"
+
+	"github.com/faiface/beep"
+	"github.com/faiface/beep/speaker"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/disasm"
 	"github.com/handegar/fv1emu/dsp"
 	"github.com/handegar/fv1emu/reader"
 	"github.com/handegar/fv1emu/settings"
+	"github.com/handegar/fv1emu/writer"
 )
 
 type ChannelStatistics struct {
-	Max     int32
-	Min     int32
-	Mean    int
-	Clipped int
-	Silent  bool
+	Max             float64
+	Min             float64
+	Mean            float64
+	Clipped         int
+	FirstClipSample int
+	Silent          bool
 }
 
 type WavStatistics struct {
@@ -36,27 +38,50 @@ type WavStatistics struct {
 }
 
 func parseCommandLineParameters() {
-	flag.StringVar(&settings.InFilename, "bin", settings.InFilename, "FV-1 binary file")
-	flag.StringVar(&settings.InFilename, "hex", settings.InFilename, "SpinCAD/Intel HEX file")
-	flag.StringVar(&settings.InputWav, "in", settings.InputWav, "Input wav-file")
-	flag.StringVar(&settings.OutputWav, "out", settings.OutputWav, "Output wav-file")
+	flag.StringVar(&settings.InFilename, "bin", settings.InFilename,
+		"FV-1 binary file")
+	flag.StringVar(&settings.InFilename, "hex", settings.InFilename,
+		"SpinCAD/Intel HEX file")
+	flag.StringVar(&settings.InputWav, "in", settings.InputWav,
+		"Input wav-file")
+	flag.StringVar(&settings.OutputWav, "out", settings.OutputWav,
+		"Output wav-file")
+	flag.BoolVar(&settings.Stream, "stream", settings.Stream,
+		"Stream output to sound device")
 
-	flag.Float64Var(&settings.ClockFrequency, "clock", settings.ClockFrequency, "Chrystal frequency")
-	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds, "Additional trail length (seconds)")
+	// FIXME: Not fully implemented yet (20220305 handegar)
+	/*
+		flag.Float64Var(&settings.ClockFrequency, "clock", settings.ClockFrequency,
+			"Chrystal frequency")
+	*/
 
-	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value, "Potentiometer 0 value (0 .. 1.0)")
-	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value, "Potentiometer 1 value (0 .. 1.0)")
-	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value, "Potentiometer 2 value (0 .. 1.0)")
+	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds,
+		"Additional trail length (seconds)")
 
-	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode, "Print program code")
+	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value,
+		"Potentiometer 0 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value,
+		"Potentiometer 1 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value,
+		"Potentiometer 2 value (0 .. 1.0)")
 
-	flag.BoolVar(&settings.Debugger, "debug", settings.Debugger, "Enable step-debugger user-interface")
-	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug, "Print additional info when debugging")
+	flag.BoolVar(&settings.Debugger, "debug", settings.Debugger,
+		"Enable step-debugger user-interface")
+	flag.IntVar(&settings.SkipToSample, "skip-to", settings.SkipToSample,
+		"Skip to sample number (when debugging)")
+
+	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode,
+		"Print program code")
+
+	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug,
+		"Print additional info when debugging")
 
 	var allPotsToMax bool = false
-	flag.BoolVar(&allPotsToMax, "pmax", allPotsToMax, "Set all potentiometers to max")
+	flag.BoolVar(&allPotsToMax, "pmax", allPotsToMax,
+		"Set all potentiometers to maximum")
 	var allPotsToMin bool = false
-	flag.BoolVar(&allPotsToMin, "pmin", allPotsToMin, "Set all potentiometers to min")
+	flag.BoolVar(&allPotsToMin, "pmin", allPotsToMin,
+		"Set all potentiometers to minimum")
 
 	// Debug stuff
 	flag.BoolVar(&settings.CHO_RDAL_is_NA, "cho-rdal-is-NA", settings.CHO_RDAL_is_NA,
@@ -83,25 +108,31 @@ func parseCommandLineParameters() {
 	}
 }
 
-func updateWavStatistics(left int32, right int32, statistics *WavStatistics) {
-	statistics.Left.Max = int32(math.Max(float64(statistics.Left.Max), float64(left)))
-	statistics.Left.Min = int32(math.Min(float64(statistics.Left.Min), float64(left)))
-	statistics.Left.Mean += int(left)
-	if math.Abs(float64(left)) > 0.0 {
+func updateWavStatistics(sampleNum int, left float64, right float64, statistics *WavStatistics) {
+	statistics.Left.Max = math.Max(statistics.Left.Max, left)
+	statistics.Left.Min = math.Min(statistics.Left.Min, left)
+	statistics.Left.Mean += left
+	if math.Abs(left) > 0.0 {
 		statistics.Left.Silent = false
 	}
-	if math.Abs(float64(left)) > float64(0x7FFF) {
+	if math.Abs(left) > 1.0 {
 		statistics.Left.Clipped += 1
+		if statistics.Left.FirstClipSample == 0 {
+			statistics.Left.FirstClipSample = sampleNum
+		}
 	}
 
-	statistics.Right.Max = int32(math.Max(float64(statistics.Right.Max), float64(right)))
-	statistics.Right.Min = int32(math.Min(float64(statistics.Right.Min), float64(right)))
-	statistics.Right.Mean += int(right)
-	if math.Abs(float64(right)) > 0.0 {
+	statistics.Right.Max = math.Max(statistics.Right.Max, right)
+	statistics.Right.Min = math.Min(statistics.Right.Min, right)
+	statistics.Right.Mean += right
+	if math.Abs(right) > 0.0 {
 		statistics.Right.Silent = false
 	}
-	if math.Abs(float64(right)) > float64(0x7FFF) {
+	if math.Abs(right) > 1.0 {
 		statistics.Right.Clipped += 1
+		if statistics.Right.FirstClipSample == 0 {
+			statistics.Right.FirstClipSample = sampleNum
+		}
 	}
 
 	statistics.NumSamples += 1
@@ -115,38 +146,18 @@ func printWavStatistics(statistics *WavStatistics) {
 		color.Cyan("* NOTE: Right channel is completely silent.")
 	}
 	if statistics.Left.Clipped > 0 {
-		color.Red("* WARNING: Left channel had %d clipped samples.",
-			statistics.Left.Clipped)
+		color.Red("* WARNING: Left channel had %d clipped samples (First clip @ sample %d).",
+			statistics.Left.Clipped, statistics.Left.FirstClipSample)
 	}
 	if statistics.Right.Clipped > 0 {
-		color.Red("* WARNING: Right channel had %d clipped samples.",
-			statistics.Right.Clipped)
+		color.Red("* WARNING: Right channel had %d clipped samples (First clip @ sample %d).",
+			statistics.Right.Clipped, statistics.Right.FirstClipSample)
 	}
 
-	color.Yellow("- Left channel MinMax=<%d, %d>. Mean=%d",
+	color.Yellow("- Left channel MinMax=<%f, %f>. Mean=%f",
 		statistics.Left.Min, statistics.Left.Max, statistics.Left.Mean)
-	color.Yellow("- Right channel MinMax=<%d, %d>. Mean=%d",
+	color.Yellow("- Right channel MinMax=<%f, %f>. Mean=%f",
 		statistics.Right.Min, statistics.Right.Max, statistics.Right.Mean)
-}
-
-func saveWavFile(wavFormat *wav.WavFormat, outSamples []wav.Sample) error {
-	fmt.Printf("* Writing to '%s'\n", settings.OutputWav)
-	outWAVFile, err := os.Create(settings.OutputWav)
-	if err != nil {
-		fmt.Printf("Error creating output file: %s\n", err)
-		return err
-	}
-	writer := wav.NewWriter(outWAVFile, uint32(len(outSamples)), 2,
-		wavFormat.SampleRate, wavFormat.BitsPerSample)
-	defer outWAVFile.Close()
-
-	err = writer.WriteSamples(outSamples)
-	if err != nil {
-		fmt.Printf("Error writing samples: %s\n", err)
-		return err
-	}
-
-	return nil
 }
 
 func main() {
@@ -196,20 +207,14 @@ func main() {
 		disasm.PrintCodeListing(opCodes)
 	}
 
-	inWAVFile, _ := os.Open(settings.InputWav)
-	reader := wav.NewReader(inWAVFile)
-	defer inWAVFile.Close()
+	f, stream, wavFormat, err := reader.ReadWAV(settings.InputWav)
+	defer f.Close()
 
-	wavFormat, err := reader.Format()
-	if err != nil {
-		fmt.Printf("Error fetching WAV format: %s\n", err)
-		return
-	}
 	isStereo := wavFormat.NumChannels == 2
 	settings.SampleRate = float64(wavFormat.SampleRate)
 
 	fmt.Printf("* Reading '%s': %d channels, %dHz, %dbit\n",
-		settings.InputWav, wavFormat.NumChannels, wavFormat.SampleRate, wavFormat.BitsPerSample)
+		settings.InputWav, wavFormat.NumChannels, wavFormat.SampleRate, wavFormat.Precision)
 	fmt.Printf("* Chrystal frequency: %.2f Hz\n", settings.ClockFrequency)
 
 	var statistics WavStatistics
@@ -227,26 +232,34 @@ func main() {
 		if err := ui.Init(); err != nil {
 			log.Fatalf("failed to initialize termui: %v", err)
 		}
+
+		if settings.SkipToSample > 0 {
+			dsp.SkipToSampleNumber(settings.SkipToSample)
+		}
 	}
 
-	var outSamples []wav.Sample
+	//
+	// Main processing loop
+	//
+
+	var outSamples [][2]float64
 	for {
-		samples, err := reader.ReadSamples()
-		if err == io.EOF {
+		var samples [][2]float64 = make([][2]float64, 1024)
+		_, err := stream.Stream(samples)
+		if !err {
 			break
 		}
 
 		letsContinue := true
 		for _, sample := range samples {
-			var left float64 = reader.FloatValue(sample, 0)
-			var right float64 = left
+			var left float64 = sample[0]
+			var right float64 = sample[1]
 			if isStereo {
-				right = reader.FloatValue(sample, 1)
+				right = sample[0]
 			}
 			outLeft, outRight, cont := processSample(left, right, state, opCodes, sampleNum)
-			updateWavStatistics(outLeft, outRight, &statistics)
-			outSamples = append(outSamples,
-				wav.Sample{[2]int{int(outLeft), int(outRight)}})
+			updateWavStatistics(sampleNum, outLeft, outRight, &statistics)
+			outSamples = append(outSamples, [2]float64{outLeft, outRight})
 
 			if !cont {
 				letsContinue = false
@@ -270,31 +283,60 @@ func main() {
 		numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
 		for i := 0; i < numTrailSamples; i++ {
 			outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes, i+numSamples)
-			updateWavStatistics(outLeft, outRight, &statistics)
-			outSamples = append(outSamples,
-				wav.Sample{[2]int{int(outLeft), int(outRight)}})
+			updateWavStatistics(sampleNum+i, outLeft, outRight, &statistics)
+			outSamples = append(outSamples, [2]float64{outLeft, outRight})
 		}
 
 		duration := time.Since(start)
 		fmt.Printf("   -> ..took %s (%d samples)\n", duration, len(outSamples))
 	}
 
-	statistics.Left.Mean = statistics.Left.Mean / int(statistics.NumSamples)
-	statistics.Right.Mean = statistics.Right.Mean / int(statistics.NumSamples)
+	statistics.Left.Mean = statistics.Left.Mean / float64(statistics.NumSamples)
+	statistics.Right.Mean = statistics.Right.Mean / float64(statistics.NumSamples)
 
 	printWavStatistics(&statistics)
 
-	if !settings.Debugger {
-		saveWavFile(wavFormat, outSamples)
+	if settings.PrintDebug {
+		fmt.Printf("DEBUG: Sin0-range used: <%f, %f>\n",
+			state.DebugFlags.Sin0Min, state.DebugFlags.Sin0Max)
+		fmt.Printf("DEBUG: Sin1-range used: <%f, %f>\n",
+			state.DebugFlags.Sin1Min, state.DebugFlags.Sin1Max)
+		fmt.Printf("DEBUG: Ramp0-range used: <%f, %f>\n",
+			state.DebugFlags.Ramp0Min, state.DebugFlags.Ramp0Max)
+		fmt.Printf("DEBUG: Ramp1-range used: <%f, %f>\n",
+			state.DebugFlags.Ramp1Min, state.DebugFlags.Ramp1Max)
+		fmt.Printf("DEBUG: XFade-range used: <%f, %f>\n",
+			state.DebugFlags.XFadeMin, state.DebugFlags.XFadeMax)
+	}
+
+	if settings.Stream {
+		color.Cyan("* Forwarding buffer to sound-device\n")
+		s := new(writer.WriteStreamer)
+		s.Data = outSamples
+		err = speaker.Init(wavFormat.SampleRate, len(outSamples))
+		if err != nil {
+			log.Fatalf("ERROR: Failed to initialize 'beep.Speaker': %v", err)
+		}
+
+		done := make(chan bool, 1)
+		speaker.Play(beep.Seq(s, beep.Callback(func() {
+			done <- true
+		})))
+		<-done
+
+	} else {
+		if !settings.Debugger {
+			writer.SaveAsWAV(settings.OutputWav, wavFormat, outSamples)
+		}
 	}
 }
 
 // Returns an Int-pair (16bits signed)
-func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op, sampleNum int) (int32, int32, bool) {
+func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op, sampleNum int) (float64, float64, bool) {
 	state.GetRegister(base.ADCL).SetFloat64(inLeft)
 	state.GetRegister(base.ADCR).SetFloat64(inRight)
 	cont := dsp.ProcessSample(opCodes, state, sampleNum)
-	outLeft := int32(state.GetRegister(base.DACL).ToFloat64() * (1 << 15))
-	outRight := int32(state.GetRegister(base.DACR).ToFloat64() * (1 << 15))
+	outLeft := state.GetRegister(base.DACL).ToFloat64()
+	outRight := state.GetRegister(base.DACR).ToFloat64()
 	return outLeft, outRight, cont
 }

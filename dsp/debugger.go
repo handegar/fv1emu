@@ -51,7 +51,7 @@ func renderHelpScreen() {
 	ypos := 0
 
 	frame := widgets.NewParagraph()
-	frame.Title = "  Help / Keys / Keywords "
+	frame.Title = "  Help / Keys / Keywords  "
 	frame.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
 	frame.SetRect(0, 0, width, height)
 	ypos += 1
@@ -186,8 +186,9 @@ func updateStateView(state *State, sampleNum int) {
 		"[PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
 		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RF:](fg:yellow) %d\n",
 		state.IP,
-		state.ACC.Value, overflowColored(state.ACC.ToFloat64(), -1.0, 1.0),
-		overflowColored(state.PACC.ToFloat64(), -1.0, 1.0),
+		// FIXME: Is the ACC an S.23 or an S1.14? (20220305 handegar)
+		state.ACC.Value, overflowColored(state.ACC.ToFloat64(), -2.0, 2.0),
+		overflowColored(state.PACC.ToFloat64(), -2.0, 2.0),
 		overflowColored(state.LR.ToFloat64(), -1.0, 1.0),
 		state.Registers[base.ADDR_PTR].Value,
 		state.DelayRAMPtr,
@@ -246,9 +247,9 @@ func updateStateView(state *State, sampleNum int) {
 	for i := 0x20; i <= 0x3f; i += 2 {
 		if showRegistersAsFloats {
 			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %s  ",
-				i-0x20, overflowColored(state.Registers[i].ToFloat64(), 0, 1.0))
+				i-0x20, overflowColored(state.Registers[i].ToFloat64(), -1.0, 1.0))
 			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %s\n",
-				i-0x20+1, overflowColored(state.Registers[i+1].ToFloat64(), 0, 1.0))
+				i-0x20+1, overflowColored(state.Registers[i+1].ToFloat64(), -1.0, 1.0))
 		} else {
 			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %d  ",
 				i-0x20, state.Registers[i].ToInt32())

@@ -533,7 +533,7 @@ func Test_LFOOps(t *testing.T) {
 			t.Fatalf("Expected Ramp0.Freq=0x%x, got 0x%x",
 				op.Args[2].RawValue, state.GetRegister(base.RAMP0_RATE).Value)
 		}
-		if state.GetRegister(base.RAMP0_RANGE).Value != base.RampAmpValuesMap[op.Args[0].RawValue] {
+		if state.GetRegister(base.RAMP0_RANGE).Value != base.RampAmpValues[int(op.Args[0].RawValue)] {
 			t.Fatalf("Expected Ramp0.Amplitude=%d, got %d",
 				base.RampAmpValues[int(op.Args[0].RawValue)],
 				state.GetRegister(base.RAMP0_RANGE).Value)
@@ -549,7 +549,7 @@ func Test_LFOOps(t *testing.T) {
 			t.Fatalf("Expected Ramp1.Freq=0x%x, got 0x%x",
 				op.Args[2].RawValue, state.GetRegister(base.RAMP1_RATE).Value)
 		}
-		if state.GetRegister(base.RAMP1_RANGE).Value != base.RampAmpValuesMap[op.Args[0].RawValue] {
+		if state.GetRegister(base.RAMP1_RANGE).Value != base.RampAmpValues[op.Args[0].RawValue] {
 			t.Fatalf("Expected Ramp1.Amplitude=%d, got %d",
 				base.RampAmpValues[int(op.Args[0].RawValue)],
 				state.GetRegister(base.RAMP1_RANGE).Value)
@@ -690,7 +690,7 @@ func Test_LFOOps(t *testing.T) {
 
 		// RMP0
 		op.Args[1].RawValue = 0x2
-		state.Ramp0State.Value = 1.23
+		state.Ramp0State.Value = 0.5
 		state.GetRegister(base.RAMP0_RANGE).Value = 2
 		applyOp(op, state)
 
@@ -704,7 +704,7 @@ func Test_LFOOps(t *testing.T) {
 
 		// RMP1
 		op.Args[1].RawValue = 0x3
-		state.Ramp1State.Value = 1.23
+		state.Ramp1State.Value = 0.5
 		state.GetRegister(base.RAMP1_RANGE).Value = 2
 		applyOp(op, state)
 

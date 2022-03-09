@@ -15,7 +15,7 @@ type State struct {
 	IP          uint                  // Instruction pointer
 	DelayRAM    [DELAY_RAM_SIZE]int32 // Internal memory
 	DelayRAMPtr int                   // Moving delay-ram pointer. Decreased each run-through
-	ACC         *Register             // Accumulator
+	ACC         *Register             // Accumulator (S1.14 or S.23?)
 	PACC        *Register             // Same as ACC but from the previous run-through
 	LR          *Register             // The last sample read from the DelayRAM
 	RUN_FLAG    bool                  // Only TRUE the first run of the program
@@ -27,8 +27,11 @@ type State struct {
 
 	DebugFlags *DebugFlags // Contains misc debug/error flags which will be set @ runtime
 
-	sinLFOReg  *Register // Holds the frozen sine LFO value
-	rampLFOReg *Register // Holds the frozen ramp LFO value
+	// Holdes
+	sin0LFOReg  *Register // Holds the frozen sine LFO value
+	sin1LFOReg  *Register // Holds the frozen sine LFO value
+	ramp0LFOReg *Register // Holds the frozen ramp LFO value
+	ramp1LFOReg *Register // Holds the frozen ramp LFO value
 
 	Registers RegisterBank
 
@@ -58,6 +61,18 @@ type DebugFlags struct {
 	LROverflowCount   int
 	DACROverflowCount int
 	DACLOverflowCount int
+
+	// Used when debugging
+	Ramp0Min float64
+	Ramp0Max float64
+	Ramp1Min float64
+	Ramp1Max float64
+	Sin0Min  float64
+	Sin0Max  float64
+	Sin1Min  float64
+	Sin1Max  float64
+	XFadeMin float64
+	XFadeMax float64
 }
 
 func (df *DebugFlags) SetSinLFOFlag(lfoNum int32) {
@@ -114,6 +129,14 @@ func (df *DebugFlags) Reset() {
 
 	df.DACROverflowCount = 0
 	df.DACLOverflowCount = 0
+
+	// Internal stuff
+	df.Ramp0Min = 999.0
+	df.Ramp0Max = -999.0
+	df.Ramp1Min = 999.0
+	df.Ramp1Max = -999.0
+	df.XFadeMax = -999.0
+	df.XFadeMin = 999.0
 }
 
 func (df *DebugFlags) Print() {
@@ -250,8 +273,10 @@ func (s *State) Reset() {
 	s.PACC = NewRegister(0)
 	s.LR = NewRegister(0)
 
-	s.sinLFOReg = NewRegister(0)
-	s.rampLFOReg = NewRegister(0)
+	s.sin0LFOReg = NewRegister(0)
+	s.sin1LFOReg = NewRegister(0)
+	s.ramp0LFOReg = NewRegister(0)
+	s.ramp1LFOReg = NewRegister(0)
 	s.Sin0State.Angle = 0.0
 	s.Sin1State.Angle = 0.0
 	s.Ramp0State.Value = 0.0

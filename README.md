@@ -31,3 +31,8 @@ NOTE: This is work in progress and not usable (yet)
 ## Links
     - A test-suite for the FV-1
       https://github.com/ndf-zz/fv1testing
+      
+## Notes
+    - UTF-16 spn files to UTF-8
+      $ iconv -f UTF-16LE -t UTF-8 <infile> -o <outfile>
+    

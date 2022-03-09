@@ -5,7 +5,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"os"
+
+	"github.com/faiface/beep"
+	"github.com/faiface/beep/wav"
 )
 
 func ReadBin(filename string) ([]uint32, error) {
@@ -88,4 +92,18 @@ func ReadHex(filename string) ([]uint32, error) {
 	}
 
 	return ints, err
+}
+
+func ReadWAV(filename string) (*os.File, beep.Streamer, beep.Format, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	stream, wavFormat, err := wav.Decode(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return f, stream, wavFormat, err
 }
