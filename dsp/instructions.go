@@ -420,8 +420,6 @@ var opTable = map[string]interface{}{
 				xfade = -xfade
 			}
 
-			fmt.Printf("xfade=%f\n", xfade)
-
 			if (flags & base.CHO_COMPC) != 0 {
 				xfade = 1.0 - xfade
 			}
