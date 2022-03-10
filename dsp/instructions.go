@@ -7,25 +7,12 @@ import (
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
+	"github.com/handegar/fv1emu/utils"
 )
 
 func isSinLFO(typ int) bool {
 	return typ == base.LFO_SIN0 || typ == base.LFO_SIN1 ||
 		typ == base.LFO_COS0 || typ == base.LFO_COS1
-}
-
-func assert(mustBeTrue bool, msg string) {
-	if !mustBeTrue {
-		fmt.Printf("ERROR: %s\n", msg)
-		panic("ASSERT failed")
-	}
-}
-
-func assertFloat64(mustBeTrue bool, val float64, msg string) {
-	if !mustBeTrue {
-		fmt.Printf("ERROR: %s.\n       Value was %f.\n", msg, val)
-		panic("ASSERT failed")
-	}
 }
 
 var opTable = map[string]interface{}{
@@ -49,7 +36,7 @@ var opTable = map[string]interface{}{
 			acc = 1.0 / (1 << 23)
 		}
 
-		state.workRegA.SetFloat64(math.Log10(acc) / math.Log10(2.0) / 16.0)
+		state.workRegA.SetFloat64((math.Log10(acc) / math.Log10(2.0)) / 16.0)
 		state.workRegA.Mult(state.workReg1_14)
 		state.workRegA.Add(state.workReg0_10)
 		state.ACC.Copy(state.workRegA)
@@ -76,8 +63,7 @@ var opTable = map[string]interface{}{
 
 		// C * ACC + D
 		state.PACC.Copy(state.ACC)
-		state.workRegA.Copy(state.ACC).Mult(state.workReg1_14).Add(state.workReg0_10)
-		state.ACC.Copy(state.workRegA)
+		state.ACC.Mult(state.workReg1_14).Add(state.workReg0_10)
 		return nil
 	},
 	"AND": func(op base.Op, state *State) error {
@@ -91,7 +77,7 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"OR": func(op base.Op, state *State) error {
-		// FIXME: PACC not updated?x (20220305 handegar)
+		// FIXME: Shall we not update PACC? (20220305 handegar)
 		state.ACC.Or(op.Args[1].RawValue)
 		return nil
 	},
@@ -108,12 +94,12 @@ var opTable = map[string]interface{}{
 	"SKP": func(op base.Op, state *State) error {
 		flags := int(op.Args[2].RawValue)
 		N := op.Args[1].RawValue
-		jmp := false
 
+		jmp := false
 		if (flags&base.SKP_RUN > 0) && state.RUN_FLAG == true { // RUN
 			jmp = true
 		}
-		if (flags&base.SKP_GEZ) > 0 && !state.ACC.IsSigned() { // GEZ
+		if (flags&base.SKP_GEZ) > 0 && !state.ACC.IsSigned() && state.ACC.ToInt32() >= 0 { // GEZ
 			jmp = true
 		}
 		if (flags&base.SKP_ZRO) > 0 && state.ACC.Value == 0 { // ZRO
@@ -151,7 +137,7 @@ var opTable = map[string]interface{}{
 	},
 	"RMPA": func(op base.Op, state *State) error {
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
-		addr := state.Registers[base.ADDR_PTR].Value >> 8               // ADDR_PTR
+		addr := state.GetRegister(base.ADDR_PTR).ToInt32()              // ADDR_PTR
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
@@ -192,7 +178,6 @@ var opTable = map[string]interface{}{
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
 		}
 
-		// FIXME: Rescale from S7.24 to S0.23. Is this correct? (20220212 handegar)
 		state.DelayRAM[idx] = state.ACC.ToQFormat(0, 23)
 		state.ACC.Mult(state.workReg1_9).Add(state.LR)
 		return nil
@@ -208,6 +193,18 @@ var opTable = map[string]interface{}{
 		state.ACC.Add(state.workRegA)
 		return nil
 	},
+	"RDFX": func(op base.Op, state *State) error {
+		regNo := int(op.Args[0].RawValue)
+		reg := state.GetRegister(regNo)
+		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
+
+		// (ACC - REG)*C + REG
+		state.PACC.Copy(state.ACC)
+		state.workRegA.Copy(state.ACC)
+		state.workRegA.Sub(reg).Mult(state.workReg1_14).Add(reg)
+		state.ACC.Copy(state.workRegA)
+		return nil
+	},
 	"WRAX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
@@ -216,7 +213,7 @@ var opTable = map[string]interface{}{
 		state.PACC.Copy(state.ACC)
 		reg := state.GetRegister(regNo)
 
-		// Special handling for LFO registers
+		// Special handling for LFO registers and ADDR_PTR
 		accAsInt := state.ACC.ToInt32()
 		if regNo == base.RAMP0_RANGE || regNo == base.RAMP1_RANGE {
 			reg.SetInt32(accAsInt >> (24 - 11 - 1))
@@ -232,7 +229,14 @@ var opTable = map[string]interface{}{
 				accAsInt = 0
 			}
 			reg.SetInt32(accAsInt >> (24 - 14))
-		} else { // Just a regular WRAX
+		} else if regNo == base.ADDR_PTR {
+			addrPtr := accAsInt >> 8
+			utils.Assert(addrPtr < ((1<<16)-1),
+				"The ADDR_PTR register cannot hold a value larger "+
+					"than the delay memory size (32k)")
+			//fmt.Printf("Write addrptr=%d\n", addrPtr)
+			reg.SetInt32(addrPtr)
+		} else { // Just a regular WRAX with ACC as a floating point value
 			reg.Copy(state.ACC)
 		}
 
@@ -246,7 +250,7 @@ var opTable = map[string]interface{}{
 		// MAX(|REG[ADDR] * C|, |ACC| )
 		state.PACC.Copy(state.ACC)
 		reg := state.GetRegister(regNo)
-		state.workRegA.Copy(reg).Mult(state.workReg1_14)
+		state.workRegA.Copy(reg).Mult(state.workReg1_14).Abs()
 		state.workRegB.Copy(state.ACC).Abs()
 		if state.workRegA.GreaterThan(state.workRegB) {
 			state.ACC.Copy(state.workRegA)
@@ -261,24 +265,15 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"MULX": func(op base.Op, state *State) error {
-		state.PACC.Copy(state.ACC)
 		regNo := int(op.Args[0].RawValue)
 		reg := state.GetRegister(regNo)
+
+		// ACC * REG[ADDR]
+		state.PACC.Copy(state.ACC)
 		state.ACC.Mult(reg)
 		return nil
 	},
-	"RDFX": func(op base.Op, state *State) error {
-		regNo := int(op.Args[0].RawValue)
-		state.workReg1_14.SetWithIntsAndFracs(op.Args[2].RawValue, 1, 14) // C
-		reg := state.GetRegister(regNo)
 
-		// (ACC - REG)*C + REG
-		state.PACC.Copy(state.ACC)
-		state.workRegA.Copy(state.ACC)
-		state.workRegA.Sub(reg).Mult(state.workReg1_14).Add(reg)
-		state.ACC.Copy(state.workRegA)
-		return nil
-	},
 	"LDAX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		reg := state.GetRegister(regNo)
@@ -310,73 +305,72 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"WLDS": func(op base.Op, state *State) error {
-		freq := op.Args[1].RawValue // Really "1/freq"
+		freq := op.Args[1].RawValue
 		amp := op.Args[0].RawValue
+		typ := op.Args[2].RawValue
 
 		// Cap values
 		if freq < 0 {
 			freq = 0
-			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+			state.DebugFlags.SetInvalidSinLFOFlag(typ)
 		} else if freq > ((1 << 9) - 1) {
 			freq = (1 << 9) - 1
-			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+			state.DebugFlags.SetInvalidSinLFOFlag(typ)
 		}
 
 		if amp < 0 {
 			amp = 0
-			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+			state.DebugFlags.SetInvalidSinLFOFlag(typ)
 		} else if amp > ((1 << 16) - 1) { // 32768
 			amp = (1 << 16) - 1
-			state.DebugFlags.SetSinLFOFlag(op.Args[2].RawValue)
+			state.DebugFlags.SetInvalidSinLFOFlag(typ)
 		}
 
-		if op.Args[2].RawValue == 0 { // SIN0
+		if typ == 0 { // SIN0
 			state.GetRegister(base.SIN0_RATE).SetInt32(freq)
 			state.GetRegister(base.SIN0_RANGE).SetInt32(amp)
-			state.Sin0State.Angle = 0.0
 		} else { // SIN1
 			state.GetRegister(base.SIN1_RATE).SetInt32(freq)
 			state.GetRegister(base.SIN1_RANGE).SetInt32(amp)
-			state.Sin1State.Angle = 0.0
 		}
 
 		return nil
 	},
 	"WLDR": func(op base.Op, state *State) error {
 		amp := base.RampAmpValues[op.Args[0].RawValue]
+		freq := op.Args[2].RawValue
+		typ := op.Args[3].RawValue
+
 		_, valid := base.RampAmpValuesMap[amp]
 		if !valid {
-			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+			state.DebugFlags.SetInvalidRampLFOFlag(typ)
 			amp = 4096
 			msg := fmt.Sprintf("Ramp amplitude value (%d) is not "+
 				"512, 1024, 2048 or 4096", amp)
 			return errors.New(msg)
 		}
 
-		freq := op.Args[2].RawValue
 		// cap frequency value
 		if freq < -(1 << 14) { // -16384
 			freq = -(1 << 14) + 1
-			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+			state.DebugFlags.SetInvalidRampLFOFlag(typ)
 		} else if freq > ((1 << 15) - 1) { // 32768
 			freq = (1 << 15) - 1
-			state.DebugFlags.SetRampLFOFlag(op.Args[3].RawValue)
+			state.DebugFlags.SetInvalidRampLFOFlag(typ)
 		}
 
-		if op.Args[3].RawValue == 0 { // RAMP0
+		if typ == 0 { // RAMP0
 			state.GetRegister(base.RAMP0_RATE).SetInt32(freq)
 			state.GetRegister(base.RAMP0_RANGE).SetInt32(amp)
-			state.Ramp0State.Value = 0
 		} else { // RAMP1
 			state.GetRegister(base.RAMP1_RATE).SetInt32(freq)
 			state.GetRegister(base.RAMP1_RANGE).SetInt32(amp)
-			state.Ramp1State.Value = 0
 		}
 		return nil
 	},
 	"JAM": func(op base.Op, state *State) error {
-		num := op.Args[1].RawValue
-		if num == 0 {
+		typ := op.Args[0].RawValue
+		if typ == 0 {
 			state.Ramp0State.Value = 0
 		} else {
 			state.Ramp1State.Value = 0
@@ -422,12 +416,10 @@ var opTable = map[string]interface{}{
 			}
 
 			xfade := GetXFadeFromLFO(lfo, typ, state)
-			// FIXME: Can we COMPA with NA? (20220309 handegar)
-			/*
-				if (flags & base.CHO_COMPA) != 0 {
-					xfade = -xfade
-				}
-			*/
+			if (flags & base.CHO_COMPA) != 0 {
+				xfade = -xfade
+			}
+
 			if (flags & base.CHO_COMPC) != 0 {
 				xfade = 1.0 - xfade
 			}
@@ -438,11 +430,10 @@ var opTable = map[string]interface{}{
 			if err != nil {
 				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 			}
-			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 
+			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 			state.ACC.Add(state.workRegA.Mult(state.workRegB))
 		} else {
-
 			delayIndex := addr + int(ScaleLFOValue(lfo, typ, state))
 			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 			if err != nil {
@@ -451,20 +442,18 @@ var opTable = map[string]interface{}{
 
 			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 
-			/*
-				// Re-get LFO value for interpolation if RPTR2 was used
-				if (flags & base.CHO_RPTR2) != 0 {
-					lfo = GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
-				}
-			*/
-
-			interpolate := lfo
-			if isSinLFO(typ) {
-				// LFO is [-1 .. 1]
-				interpolate = (lfo + 1.0) / 2.0 // get 0...1.0
+			// Re-get LFO value for interpolation if RPTR2 was used
+			if (flags & base.CHO_RPTR2) != 0 {
+				lfo = GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
 			}
 
-			assert(interpolate >= 0.0 && interpolate <= 1.0,
+			interpolate := lfo //NormalizeLFOValue(lfo, typ, state)
+			if isSinLFO(typ) {
+				// LFO is [-1 .. 1]
+				interpolate = (lfo + 1.0) / 2.0 // Shift to [0 .. 1.0]
+			}
+
+			utils.Assert(interpolate >= 0.0 && interpolate <= 1.0,
 				"interpolate is < 0 || > 1.0")
 
 			if (flags & base.CHO_COMPC) != 0 {

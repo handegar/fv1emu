@@ -8,6 +8,20 @@ import (
 	"github.com/handegar/fv1emu/base"
 )
 
+func Assert(mustBeTrue bool, msg string) {
+	if !mustBeTrue {
+		fmt.Printf("ERROR: %s\n", msg)
+		panic("ASSERT failed")
+	}
+}
+
+func AssertFloat64(mustBeTrue bool, val float64, msg string) {
+	if !mustBeTrue {
+		fmt.Printf("ERROR: %s.\n       Value was %f.\n", msg, val)
+		panic("ASSERT failed")
+	}
+}
+
 func StringToQFormat(str string, intbits int, fractionbits int) int32 {
 	num, err := strconv.ParseFloat(str, 64)
 	if err != nil {

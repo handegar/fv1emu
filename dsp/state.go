@@ -75,7 +75,7 @@ type DebugFlags struct {
 	XFadeMax float64
 }
 
-func (df *DebugFlags) SetSinLFOFlag(lfoNum int32) {
+func (df *DebugFlags) SetInvalidSinLFOFlag(lfoNum int32) {
 	if lfoNum == 0 {
 		df.InvalidSin0Values = true
 	} else {
@@ -83,7 +83,7 @@ func (df *DebugFlags) SetSinLFOFlag(lfoNum int32) {
 	}
 }
 
-func (df *DebugFlags) SetRampLFOFlag(lfoNum int32) {
+func (df *DebugFlags) SetInvalidRampLFOFlag(lfoNum int32) {
 	if lfoNum == 0 {
 		df.InvalidRamp0Values = true
 	} else {

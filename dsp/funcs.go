@@ -8,6 +8,7 @@ import (
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
+	"github.com/handegar/fv1emu/utils"
 )
 
 var skipNumSamples int = 0
@@ -127,12 +128,10 @@ func updateSinLFO(state *State) {
 	sin1Freq := 0.5 + (state.Registers[base.SIN1_RATE].ToFloat64() * (20 - 0.5))
 
 	// Update Sine-LFOs
-	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) /
-		float64(settings.InstructionsPerSample)
+	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) * 8.0
 	state.Sin0State.Angle += sin0delta
 
-	sin1delta := ((2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate) /
-		float64(settings.InstructionsPerSample)
+	sin1delta := ((2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate) * 8.0
 	state.Sin1State.Angle += sin1delta
 }
 
@@ -216,7 +215,7 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	state.Ramp0State.Value = rmp0value
 	state.Ramp1State.Value = rmp1value
 
-	assert(lfo < 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1]")
+	utils.Assert(lfo < 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1]")
 	return lfo
 }
 
@@ -227,9 +226,9 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32()) // / float64((1<<16)-1)
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) // / float64((1<<16)-1)
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
 	case base.LFO_RMP0:
 		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32())
 	case base.LFO_RMP1:
@@ -295,18 +294,18 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 		state.sin1LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP0:
 		lfo = state.Ramp0State.Value
-		assertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo, "LFO Ramp0 range outside [-1 .. 1]")
+		utils.AssertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo,
+			"LFO Ramp0 range outside [-1 .. 1]")
 		state.ramp0LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP1:
 		lfo = state.Ramp1State.Value
-		assertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo, "LFO Ramp1 range outside [-1 .. 1]")
+		utils.AssertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo,
+			"LFO Ramp1 range outside [-1 .. 1]")
 		state.ramp1LFOReg.SetFloat64(lfo)
 
 	default:
 		panic("Unknown LFO type")
 	}
-
-	//fmt.Printf("LFO=%f-.------- %d\n", lfo, state.Ramp0State.count)
 
 	// Debugging
 	if lfoType == base.LFO_SIN0 {

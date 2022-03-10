@@ -10,6 +10,7 @@ import (
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/disasm"
+	"github.com/handegar/fv1emu/settings"
 )
 
 var lastState *State
@@ -182,12 +183,12 @@ func updateStateView(state *State, sampleNum int) {
 	if state.RUN_FLAG {
 		rfInt = 1
 	}
-	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:yellow,mod:bold) %d (%s)\n"+
+	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:yellow,mod:bold) %s (%d)\n"+
 		"[PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
 		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RF:](fg:yellow) %d\n",
 		state.IP,
 		// FIXME: Is the ACC an S.23 or an S1.14? (20220305 handegar)
-		state.ACC.Value, overflowColored(state.ACC.ToFloat64(), -2.0, 2.0),
+		overflowColored(state.ACC.ToFloat64(), -2.0, 2.0), state.ACC.Value,
 		overflowColored(state.PACC.ToFloat64(), -2.0, 2.0),
 		overflowColored(state.LR.ToFloat64(), -1.0, 1.0),
 		state.Registers[base.ADDR_PTR].Value,
@@ -291,7 +292,19 @@ func updateMetaInfoView(opCodes []base.Op, state *State) {
 	infoP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
 	infoP.Text = infoStr
 	infoP.SetRect(0, theight-5, twidth, theight)
+
+	versionP := widgets.NewParagraph()
+	versionP.Border = false
+	versionP.PaddingBottom = 0
+	versionP.PaddingTop = 0
+	versionP.PaddingLeft = 0
+	versionP.PaddingRight = 0
+	versionP.Text = fmt.Sprintf("[v%s](fg:blue)", settings.Version)
+	versionP.SetRect(twidth-len(settings.Version)-6, theight-1,
+		twidth-3, theight)
+
 	ui.Render(infoP)
+	ui.Render(versionP)
 }
 
 /*

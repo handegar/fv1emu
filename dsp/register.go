@@ -145,6 +145,7 @@ func (r *Register) Xor(value int32) *Register {
 }
 
 func (r *Register) Not(value int32) *Register {
+	// Could we just do "value = -value"?
 	r.Value = r.Value &^ value
 	return r
 }

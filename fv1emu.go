@@ -221,7 +221,7 @@ func main() {
 	statistics.Left.Silent = true
 	statistics.Right.Silent = true
 
-	fmt.Println("  Processing...")
+	fmt.Printf("* Processing...\n")
 
 	start := time.Now()
 	var state *dsp.State = dsp.NewState()
@@ -260,13 +260,12 @@ func main() {
 			outLeft, outRight, cont := processSample(left, right, state, opCodes, sampleNum)
 			updateWavStatistics(sampleNum, outLeft, outRight, &statistics)
 			outSamples = append(outSamples, [2]float64{outLeft, outRight})
+			sampleNum += 1
 
 			if !cont {
 				letsContinue = false
 				break
 			}
-
-			sampleNum += 1
 		}
 
 		if !letsContinue {
@@ -280,13 +279,22 @@ func main() {
 	} else {
 		// Do trail-samples?
 		numSamples := len(outSamples)
-		numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
-		for i := 0; i < numTrailSamples; i++ {
-			outLeft, outRight, _ := processSample(0.0, 0.0, state, opCodes, i+numSamples)
-			updateWavStatistics(sampleNum+i, outLeft, outRight, &statistics)
-			outSamples = append(outSamples, [2]float64{outLeft, outRight})
-		}
 
+		if settings.TrailSeconds > 0.0 {
+			numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
+			fmt.Printf("* Adding a %.2f second(s) trail (%d samples)\n",
+				settings.TrailSeconds, numTrailSamples)
+			for i := 0; i < numTrailSamples; i++ {
+				outLeft, outRight, ok := processSample(0.0, 0.0, state, opCodes, numSamples+i)
+				updateWavStatistics(numSamples+i, 0.0, 0.0, &statistics)
+
+				if !ok {
+					break
+				}
+
+				outSamples = append(outSamples, [2]float64{outLeft, outRight})
+			}
+		}
 		duration := time.Since(start)
 		fmt.Printf("   -> ..took %s (%d samples)\n", duration, len(outSamples))
 	}
@@ -318,6 +326,8 @@ func main() {
 			log.Fatalf("ERROR: Failed to initialize 'beep.Speaker': %v", err)
 		}
 
+		// FIXME: The "done" signal does not work properly
+		// yet. Investigate. (20220310 handegar)
 		done := make(chan bool, 1)
 		speaker.Play(beep.Seq(s, beep.Callback(func() {
 			done <- true

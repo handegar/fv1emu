@@ -62,7 +62,7 @@ var Ops = map[uint32]Op{
 		//  []OpArg{{15, UInt, 0}, {9, UInt, 0}, {1, Flag, 0}, {2, Const, 0}},
 		0},
 	0x13: {"JAM",
-		[]OpArg{{1, Const, 0}, {1, Flag, 0}, {21, Const, 1}},
+		[]OpArg{{1, Flag, 0}, {25, Const, 1}},
 		0},
 	0x14: {"CHO", //  SubCmd: 0b00=RDA, 0b10=SOF, 0b11=RDAL,
 		//       ADDR           N             0              FLAGS         SubCmd
