@@ -140,19 +140,12 @@ func updateSinLFO(state *State) {
 //
 func updateRampLFO(state *State) {
 	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32() + 1)
-	range0 := float64(state.Registers[base.RAMP0_RANGE].ToInt32())
 	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32() + 1)
-	range1 := float64(state.Registers[base.RAMP1_RANGE].ToInt32())
 
-	if rate0 != 0 {
-		fcount := float64(state.Ramp0State.count)
-		state.Ramp0State.Value = (fcount * (range0 / rate0)) / (range0 + 1)
-	}
-
-	if rate1 != 0 {
-		fcount := float64(state.Ramp1State.count)
-		state.Ramp1State.Value = (fcount * (range1 / rate1)) / (range1 + 1)
-	}
+	// FIXME: What is the correct value here? (20220310 handegar)
+	x := 128.0 // Magic: tuned by hand.
+	state.Ramp0State.Value += (1.0 / rate0) / x
+	state.Ramp1State.Value += (1.0 / rate1) / x
 
 	for state.Ramp0State.Value > 1.0 {
 		state.Ramp0State.Value -= 1.0
@@ -161,61 +154,38 @@ func updateRampLFO(state *State) {
 	for state.Ramp1State.Value > 1.0 {
 		state.Ramp1State.Value -= 1.0
 	}
-
-	state.Ramp0State.count += 1
-	state.Ramp1State.count += 1
-	if float64(state.Ramp0State.count) > rate0 {
-		state.Ramp0State.count = state.Ramp0State.count - int(rate0)
-	}
-	if float64(state.Ramp1State.count) > rate1 {
-		state.Ramp1State.count = state.Ramp1State.count - int(rate1)
-	}
-
 }
 
 /**
   Returns the LFO value, but 1/2 further into the cycle.
   NB: This is only valid for RAMP LFOs.
 */
+
 func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	if isSinLFO(lfoType) {
 		panic("Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
 	}
 
 	// Save the original RAMP state
-	rmp0count := state.Ramp0State.count
-	rmp1count := state.Ramp1State.count
 	rmp0value := state.Ramp0State.Value
 	rmp1value := state.Ramp1State.Value
 	lfo := 0.0
 
 	if lfoType == base.LFO_RMP0 {
-		rate0 := state.Registers[base.RAMP0_RATE].ToInt32()
-		state.Ramp0State.count += int(rate0 >> 1)
-		if state.Ramp0State.count > int(rate0) {
-			state.Ramp0State.count = state.Ramp0State.count - int(rate0)
-		}
-
+		state.Ramp0State.Value += 0.5
 		updateRampLFO(state)
 		lfo = state.Ramp0State.Value
 	} else {
-		rate1 := state.Registers[base.RAMP1_RATE].ToInt32()
-		state.Ramp1State.count += int(rate1 >> 1)
-		if state.Ramp1State.count > int(rate1) {
-			state.Ramp1State.count = state.Ramp1State.count - int(rate1)
-		}
-
+		state.Ramp1State.Value += 0.5
 		updateRampLFO(state)
 		lfo = state.Ramp1State.Value
 	}
 
 	// Restore the state
-	state.Ramp0State.count = rmp0count
-	state.Ramp1State.count = rmp1count
 	state.Ramp0State.Value = rmp0value
 	state.Ramp1State.Value = rmp1value
 
-	utils.Assert(lfo < 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1]")
+	utils.Assert(lfo <= 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1]")
 	return lfo
 }
 

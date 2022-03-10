@@ -173,7 +173,6 @@ type SINLFOState struct {
 
 type RAMPState struct {
 	Value float64
-	count int // Used internally to calculate the saw-tooth.
 }
 
 type RegisterBank map[int]*Register

@@ -420,6 +420,8 @@ var opTable = map[string]interface{}{
 				xfade = -xfade
 			}
 
+			fmt.Printf("xfade=%f\n", xfade)
+
 			if (flags & base.CHO_COMPC) != 0 {
 				xfade = 1.0 - xfade
 			}
@@ -443,10 +445,11 @@ var opTable = map[string]interface{}{
 			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 
 			// Re-get LFO value for interpolation if RPTR2 was used
-			if (flags & base.CHO_RPTR2) != 0 {
-				lfo = GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
-			}
-
+			/*
+				if (flags & base.CHO_RPTR2) != 0 {
+					lfo = GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
+				}
+			*/
 			interpolate := lfo //NormalizeLFOValue(lfo, typ, state)
 			if isSinLFO(typ) {
 				// LFO is [-1 .. 1]
