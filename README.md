@@ -26,7 +26,7 @@
     It is possible to step-debug a FV-1 program by adding the '-debug' paramenter.
     One can then inspect the internal state and registers of the system for each operation.
 
-    ![Debugger](debugger-screenshot.png)
+    ![Debugger](/debugger-screenshot.png)
 
 
 ## TODOs
