@@ -94,7 +94,9 @@ registers of the system. The debugger is terminal-based.
  - Test on MacOS and Windows.
  - Better streaming, preferably realtime streaming.
  - Realtime processing of an input stream.
-
+   - Add functionality for changing the POT-values at runtime.
+ - Let the user set the external clock-speed to other frequencies than
+   the default.
 
 
 ## Links
