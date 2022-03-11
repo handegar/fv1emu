@@ -99,17 +99,15 @@ registers of the system. The debugger is terminal-based.
 
 ## Links
 
- - A test-suite for the FV-1
-   https://github.com/ndf-zz/fv1testing
+ - A test-suite for the FV-1: https://github.com/ndf-zz/fv1testing
 
- - A Python based FV-1 assembler
-   https://github.com/ndf-zz/asfv1
+ - A Python based FV-1 assembler: https://github.com/ndf-zz/asfv1
 
 
 
 ## Notes
 
- - UTF-16 spn files to UTF-8
+- Converting UTF-16 .spn files to UTF-8:
  
         $ iconv -f UTF-16LE -t UTF-8 <infile> -o <outfile>
     
