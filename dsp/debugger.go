@@ -324,7 +324,10 @@ func WaitForDebuggerInput(state *State) string {
 		case "n", "<Down>":
 			return "next op"
 		case "p", "<Up>":
-			return "previous op"
+			if state.IP > 0 {
+				return "previous op"
+			}
+			return WaitForDebuggerInput(state) // Keep waiting
 		case "s", "<PageDown>":
 			return "next sample"
 		case "S":

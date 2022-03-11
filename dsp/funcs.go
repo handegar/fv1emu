@@ -22,13 +22,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 
 	// Used to keep previous states within one sample for
 	// "rewinding" when debugging.
-	previousStates := make([]*State, len(opCodes))
+	var previousStates map[uint]*State = make(map[uint]*State)
+	utils.Assert(len(previousStates) == 0, "Map not properly cleared!")
 
 	for state.IP < uint(len(opCodes)) {
-		if int(state.IP) > len(opCodes) { // The program has ended.
-			break
-		}
-
 		// FIXME: The LFO should probably be updated in sync
 		// with an external clock, not per
 		// instruction. (20220227 handegar)
@@ -38,7 +35,7 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 		op := opCodes[state.IP]
 
 		// Print pre-op state
-		if settings.Debugger && skipNumSamples <= 0 {
+		if settings.Debugger && skipNumSamples <= 1 {
 			// Append to the state-history for this sample
 			if previousStates[state.IP] == nil {
 				previousStates[state.IP] = state.Duplicate()
@@ -66,10 +63,24 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 			case "next op":
 				break
 			case "previous op":
-				if state.IP > 0 {
-					state.Copy(previousStates[state.IP-1])
+				// Rewind until we find the closes
+				// valid state. Might be longer than
+				// -1 due to SKPs.
+				var prevState *State = nil
+				for x := state.IP - 1; x >= 0; x-- {
+					ok := false
+					prevState, ok = previousStates[x]
+					if ok {
+						break
+					}
 				}
-				continue
+
+				if prevState != nil {
+					state.Copy(prevState)
+					continue
+				} else {
+					panic("No previous state could be found!")
+				}
 			case "next sample":
 				skipNumSamples = 1
 				break
@@ -96,14 +107,14 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 
 	state.RUN_FLAG = true
 	// FIXME: Should we clear ACC? (20220222 handegar)
-	state.ACC.Clear()
+	//state.ACC.Clear()
 
 	state.DelayRAMPtr -= 1
 	if state.DelayRAMPtr <= -32768 {
 		state.DelayRAMPtr = 0
 	}
 
-	// Stop debug-skipping
+	// Decrease debug-skipping count
 	if skipNumSamples > 0 {
 		skipNumSamples -= 1
 	}
@@ -118,7 +129,17 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 		updateSinLFO(state)
 		updateRampLFO(state)
 	}
+	/*
+		if sampleNum == 1 {
+			fmt.Println("PREV STATES")
+			for k, v := range previousStates {
+				fmt.Printf("%d: %p\n", k, v)
+			}
+			fmt.Println("")
 
+			panic(true)
+		}
+	*/
 	return true // Lets continue!
 }
 

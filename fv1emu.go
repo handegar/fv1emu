@@ -318,7 +318,7 @@ func main() {
 	}
 
 	if settings.Stream {
-		color.Cyan("* Forwarding buffer to sound-device\n")
+		color.Cyan("* Forwarding buffer to sound-device (CTRL-C to quit)\n")
 		s := new(writer.WriteStreamer)
 		s.Data = outSamples
 		err = speaker.Init(wavFormat.SampleRate, len(outSamples))

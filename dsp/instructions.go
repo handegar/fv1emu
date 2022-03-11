@@ -230,11 +230,10 @@ var opTable = map[string]interface{}{
 			}
 			reg.SetInt32(accAsInt >> (24 - 14))
 		} else if regNo == base.ADDR_PTR {
-			addrPtr := accAsInt >> 8
+			addrPtr := accAsInt >> 8 // Shift down value to actual int-range
 			utils.Assert(addrPtr < ((1<<16)-1),
 				"The ADDR_PTR register cannot hold a value larger "+
 					"than the delay memory size (32k)")
-			//fmt.Printf("Write addrptr=%d\n", addrPtr)
 			reg.SetInt32(addrPtr)
 		} else { // Just a regular WRAX with ACC as a floating point value
 			reg.Copy(state.ACC)

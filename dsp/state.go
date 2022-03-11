@@ -233,6 +233,7 @@ func (s *State) Copy(in *State) {
 
 	for i := 0; i < 64; i++ {
 		if (i >= 8 && i <= 15) || i == 19 || (i >= 25 && i <= 31) {
+			s.Registers[i] = nil
 			continue // Unused registers
 		}
 		s.Registers[i] = NewRegister(0) // All registers are S.23 as default
@@ -242,26 +243,7 @@ func (s *State) Copy(in *State) {
 
 func (s *State) Duplicate() *State {
 	new := NewState()
-
-	new.IP = s.IP
-	new.RUN_FLAG = s.RUN_FLAG
-	new.ACC.Copy(s.ACC)
-	new.PACC.Copy(s.PACC)
-	new.LR.Copy(s.LR)
-	new.Sin0State.Angle = s.Sin0State.Angle
-	new.Sin1State.Angle = s.Sin1State.Angle
-	new.Ramp0State.Value = s.Ramp0State.Value
-	new.Ramp1State.Value = s.Ramp1State.Value
-	new.DelayRAMPtr = s.DelayRAMPtr
-
-	for i := 0; i < 64; i++ {
-		if (i >= 8 && i <= 15) || i == 19 || (i >= 25 && i <= 31) {
-			continue // Unused registers
-		}
-		new.Registers[i] = NewRegister(0) // All registers are S.23 as default
-		new.Registers[i].Copy(s.Registers[i])
-	}
-
+	new.Copy(s)
 	return new
 }
 
