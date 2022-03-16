@@ -148,32 +148,38 @@ func updateSinLFO(state *State) {
 	sin0Freq := 0.5 + (state.Registers[base.SIN0_RATE].ToFloat64() * (20 - 0.5))
 	sin1Freq := 0.5 + (state.Registers[base.SIN1_RATE].ToFloat64() * (20 - 0.5))
 
+	// FIXME: What is the correct value here? (20220310 handegar)
+	// 168.0: Tuned "sin-lfo.spn" to 100Hz for POT1=0.0
+	x := 168.0
+
 	// Update Sine-LFOs
-	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) * 8.0
+	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) * x
 	state.Sin0State.Angle += sin0delta
 
-	sin1delta := ((2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate) * 8.0
+	sin1delta := ((2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate) * x
 	state.Sin1State.Angle += sin1delta
 }
 
 //
-// This generates a sawtooth of [0 .. 1.0].
+// This generates a sawtooth of [0 .. 0.5].
 //
 func updateRampLFO(state *State) {
 	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32() + 1)
 	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32() + 1)
 
 	// FIXME: What is the correct value here? (20220310 handegar)
-	x := 128.0 // Magic: tuned by hand.
+	// - 56.0: To get the "ramp-lfo.spn" to get 100Hz with POT1=0.0
+	x := 56.0
+
 	state.Ramp0State.Value += (1.0 / rate0) / x
 	state.Ramp1State.Value += (1.0 / rate1) / x
 
-	for state.Ramp0State.Value > 1.0 {
-		state.Ramp0State.Value -= 1.0
+	for state.Ramp0State.Value > 0.5 {
+		state.Ramp0State.Value -= 0.5
 	}
 
-	for state.Ramp1State.Value > 1.0 {
-		state.Ramp1State.Value -= 1.0
+	for state.Ramp1State.Value > 0.5 {
+		state.Ramp1State.Value -= 0.5
 	}
 }
 
@@ -206,7 +212,7 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	state.Ramp0State.Value = rmp0value
 	state.Ramp1State.Value = rmp1value
 
-	utils.Assert(lfo <= 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1]")
+	utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO range outside [0 .. 0.5]")
 	return lfo
 }
 
@@ -214,16 +220,22 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
   Return a LFO value scaled with the amplitude value specified in the state
 */
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
+	// FIXME: Get these right (20220311 handegar)
+	// 32.0: Handtuned by listening to the OEM programs from SpinSEMI
+	// 2.0: The tri-lfo.spn program.
+	sinX := 2.0
+	rmpX := 2.0
+
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32()) / sinX
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) / sinX
 	case base.LFO_RMP0:
-		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32()) / rmpX
 	case base.LFO_RMP1:
-		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32()) / rmpX
 	}
 
 	return value * amp
@@ -285,13 +297,13 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 		state.sin1LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP0:
 		lfo = state.Ramp0State.Value
-		utils.AssertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo,
-			"LFO Ramp0 range outside [-1 .. 1]")
+		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo,
+			"LFO Ramp0 range outside [0 .. 0.5]")
 		state.ramp0LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP1:
 		lfo = state.Ramp1State.Value
-		utils.AssertFloat64(lfo <= 1.0 && lfo >= 0.0, lfo,
-			"LFO Ramp1 range outside [-1 .. 1]")
+		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo,
+			"LFO Ramp1 range outside [0 .. 0.5]")
 		state.ramp1LFOReg.SetFloat64(lfo)
 
 	default:

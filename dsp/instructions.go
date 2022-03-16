@@ -49,7 +49,7 @@ var opTable = map[string]interface{}{
 		// C*exp(ACC) + D
 		state.PACC.Copy(state.ACC)
 		acc := state.ACC.ToFloat64()
-		if acc >= 0.0 {
+		if acc >= 0 {
 			state.ACC.SetFloat64(0.9999998807907104).Mult(state.workReg1_14).Add(state.workReg0_10)
 		} else {
 			acc = acc * 16.0
@@ -433,7 +433,8 @@ var opTable = map[string]interface{}{
 			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 			state.ACC.Add(state.workRegA.Mult(state.workRegB))
 		} else {
-			delayIndex := addr + int(ScaleLFOValue(lfo, typ, state))
+			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			delayIndex := addr + int(scaledLFO)
 			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 			if err != nil {
 				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()

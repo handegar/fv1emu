@@ -1,0 +1,43 @@
+;;; Example from http://www.spinsemi.com/knowledge_base/coding_examples.html
+;;; Turning a sawtooth-LFO into a triangle-wave [0 .. 0.25]
+;;;
+;;; Pot0: Amplitude
+;;; Pot1: Rate/Frequency
+;;;
+;;;  => Left: Sin0
+;;;  => Right: Sin1
+;;;
+
+	SKP    RUN, start
+	WLDR   RMP0, 10, 4096
+	WLDR   RMP1, 100, 4096   
+	; End of skip/initiaization
+
+	; Main program code
+	; First, read in POT0 and write it to LFO0_RANGE
+	; POT0 -> ACC
+start:
+	;; LDAX    POT0
+	;; ; Write it to LFO0/1 amplitude register and clear ACC
+	;; WRAX    RMP0_RANGE, 1.0
+	;; WRAX    RMP1_RANGE, 0
+	;; ; Read in POT1 and multiply it by 0.7338, POT1 * 0.7338 -> ACC
+	;; RDAX    POT1, 0.7338   
+	;; ; Add 0.2446 to the value in the accumulator        
+	;; SOF     1.0, 0.2446
+
+	;; ; Write it to the LFO0/1 frequency register and clear ACC
+	;; WRAX    RMP0_RATE, 1.0
+	;; WRAX    RMP1_RATE, 0
+
+        ; We now use the cho rdal instruction which will read an LFO into the accumulator
+	CHO     RDAL, RMP0      ;Range [0 .. 0.5]
+        SOF	1.0, -0.25	;offset by -0.25, giving a saw wave that ranges from -0.25 to +0.25
+        ABSA    	 	;make negative values positive, making the result a triangle.       
+	WRAX    DACL, 0
+
+	CHO     RDAL, RMP1
+	SOF	1.0, -0.25	;offset by -0.25, giving a saw wave that ranges from -0.25 to +0.25
+        ;ABSA                    ;make negative values positive, making the result a triangle. 
+	WRAX   DACR, 0
+

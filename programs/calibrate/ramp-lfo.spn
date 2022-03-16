@@ -1,0 +1,50 @@
+;;; From Application note AN-0001
+;;; Program AN0001-2.spn
+;;;
+;;; Pot0: Amplitude
+;;; Pot1: Rate/Frequency
+;;;
+;;;  => Left: Rmp0
+;;;  => Right: Rmp1
+;;;
+
+	; Initialization, only run on first execution of code
+	; Skip to the START label if NOT the first time
+	SKP    RUN, start
+	; Initialize ramp LFO0/1 for 5Hz and +/- 0
+	WLDR   RMP0, 0, 4096
+	WLDR   RMP1, 0, 4096
+	; End of skip/initiaization
+
+	; Main program code
+	; First, read in POT0 and write it to LFO0_RANGE
+	; POT0 -> ACC
+start:
+	LDAX    POT0
+	; Write it to LFO0/1 amplitude register and clear ACC
+	WRAX    RMP0_RANGE, 1.0
+	WRAX    RMP1_RANGE, 0
+	; Read in POT1 and multiply it by 0.7338, POT1 * 0.7338 -> ACC
+	RDAX    POT1, 0.7338
+	; Add 0.2446 to the value in the accumulator
+	SOF     1.0, 0.2446
+	; Write it to the LFO0/1 frequency register and clear ACC
+	WRAX    RMP0_RATE, 1.0
+	WRAX    RMP1_RATE, 0
+	;
+	; We now use the cho rdal instruction which will read an LFO into the accumulator
+	CHO     RDAL, RMP0
+	;
+	; Wave is now in ACC, write it to DACL
+	WRAX    DACL, 0
+
+	CHO     RDAL, RMP1
+	;
+	; Wave is now in ACC, write it to DACL
+	WRAX   DACR, 0
+
+
+	; That's it!
+
+	; NOTE: When you view the output on a scope you will see amplitude variation
+	; due to the high pass filtering in the DAC. 

@@ -1,0 +1,56 @@
+;;; From Application note AN-0001
+;;; Program AN0001-2.spn
+;;;
+;;; Pot0: Amplitude
+;;; Pot1: Rate/Frequency
+;;;
+;;;  => Left: Sin0
+;;;  => Right: Sin1
+;;;
+
+        
+;;; Initialization, only run on first execution of code
+;;; Skip to the START label if NOT the first time
+	SKP    RUN, start
+
+;;; Initialize sin LFO 0 for 5Hz and +/- 0
+;;; 
+;;;  Formula: Hz=(VALUE*44100)/(2^17*2*PI)
+;;; 
+;;;    POT1=0.5: Value=5005 -> Hz=268  
+;;;    POT1=0.0: Value=2000 -> Hz=107
+;;; 
+	WLDS   SIN0, 125, 0
+	WLDS   SIN1, 125, 0
+
+	; Main program code
+	; First, read in POT0 and write it to LFO0_RANGE
+	; POT0 -> ACC
+start:
+	LDAX    POT0
+	; Write it to LFO0/1 amplitude register and clear ACC
+	WRAX    SIN0_RANGE, 1.0
+	WRAX    SIN1_RANGE, 0
+	
+	RDAX    POT1, 0.7338    ; Read in POT1 and multiply it by 0.7338
+                                ; POT1 * 0.7338 -> ACC 
+	
+	SOF     1.0, 0.2446     ; Add 0.2446 to the value in the accumulator        
+
+	; Write it to the LFO0/1 frequency register and clear ACC
+	WRAX    SIN0_RATE, 1.0
+	WRAX    SIN1_RATE, 0
+
+	
+	CHO     RDAL, SIN0      ; We now use the cho rdal instruction
+	                        ; which will read an LFO into the accumulator 
+	                        
+	WRAX    DACL, 0         ; Wave is now in ACC, write it to DACL    
+	CHO     RDAL, SIN1
+		
+	WRAX    DACR, 0  ; Wave is now in ACC, write it to DACL
+
+;;; That's it!
+
+;;; NOTE: When you view the output on a scope you will see amplitude variation
+;;; due to the high pass filtering in the DAC. 

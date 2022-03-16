@@ -125,7 +125,9 @@ func (r *Register) Mult(reg *Register) *Register {
 
 func (r *Register) Abs() *Register {
 	// FIXME: Do this using bit shifts instead? (20220209 handegar)
-	r.Value = int32(math.Abs(float64(r.Value)))
+	if r.IsSigned() {
+		r.Value = -r.Value
+	}
 	return r
 }
 
