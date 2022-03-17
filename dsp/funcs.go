@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	ui "github.com/gizak/termui/v3"
-
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
 	"github.com/handegar/fv1emu/utils"
@@ -13,17 +11,27 @@ import (
 
 var skipNumSamples int = 0
 
-func SkipToSampleNumber(num int) {
+// Return ENUMS for the debug callbacks
+const (
+	Ok int = iota
+	NextInstruction
+	Quit
+	Fatal
+)
+
+type DebugCallback func(opCodes []base.Op, state *State, sampleNum int) int
+
+func SkipNumSamples(num int) {
 	skipNumSamples = num
 }
 
-func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
-	state.IP = 0
+func GetSkipNumSamples() int {
+	return skipNumSamples
+}
 
-	// Used to keep previous states within one sample for
-	// "rewinding" when debugging.
-	var previousStates map[uint]*State = make(map[uint]*State)
-	utils.Assert(len(previousStates) == 0, "Map not properly cleared!")
+func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
+	debugPre DebugCallback, debugPost DebugCallback) bool {
+	state.IP = 0
 
 	for state.IP < uint(len(opCodes)) {
 		// FIXME: The LFO should probably be updated in sync
@@ -34,68 +42,25 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 
 		op := opCodes[state.IP]
 
-		// Print pre-op state
-		if settings.Debugger && skipNumSamples <= 1 {
-			// Append to the state-history for this sample
-			if previousStates[state.IP] == nil {
-				previousStates[state.IP] = state.Duplicate()
-			}
-			UpdateDebuggerScreen(opCodes, state, sampleNum)
+		if skipNumSamples <= 1 {
+			debugPre(opCodes, state, sampleNum)
 		}
 
 		err := applyOp(op, state)
 		if err != nil {
-			if settings.Debugger {
-				ui.Close()
-			}
 			fmt.Printf("An error occured (IP=%d, Sample=%d):\n",
 				state.IP, sampleNum)
 			fmt.Println(err)
 			state.DebugFlags.Print()
-			panic(false)
+			return false
 		}
 
-		if settings.Debugger && skipNumSamples <= 0 {
-			e := WaitForDebuggerInput(state)
-			switch e {
-			case "quit":
+		if skipNumSamples <= 0 {
+			status := debugPost(opCodes, state, sampleNum)
+			if status == Fatal || status == Quit {
 				return false
-			case "next op":
-				break
-			case "previous op":
-				// Rewind until we find the closes
-				// valid state. Might be longer than
-				// -1 due to SKPs.
-				var prevState *State = nil
-				for x := state.IP - 1; x >= 0; x-- {
-					ok := false
-					prevState, ok = previousStates[x]
-					if ok {
-						break
-					}
-				}
-
-				if prevState != nil {
-					state.Copy(prevState)
-					continue
-				} else {
-					panic("No previous state could be found!")
-				}
-			case "next sample":
-				skipNumSamples = 1
-				break
-			case "next 100 samples":
-				skipNumSamples = 100
-				break
-			case "next 1000 samples":
-				skipNumSamples = 1000
-				break
-			case "next 10000 samples":
-				skipNumSamples = 10000
-				break
-			case "next 100000 samples":
-				skipNumSamples = 100000
-				break
+			} else if status == NextInstruction {
+				continue
 			}
 		}
 
@@ -129,17 +94,7 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int) bool {
 		updateSinLFO(state)
 		updateRampLFO(state)
 	}
-	/*
-		if sampleNum == 1 {
-			fmt.Println("PREV STATES")
-			for k, v := range previousStates {
-				fmt.Printf("%d: %p\n", k, v)
-			}
-			fmt.Println("")
 
-			panic(true)
-		}
-	*/
 	return true // Lets continue!
 }
 

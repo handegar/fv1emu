@@ -15,6 +15,7 @@ import (
 	"github.com/faiface/beep/speaker"
 
 	"github.com/handegar/fv1emu/base"
+	"github.com/handegar/fv1emu/debugger"
 	"github.com/handegar/fv1emu/disasm"
 	"github.com/handegar/fv1emu/dsp"
 	"github.com/handegar/fv1emu/reader"
@@ -232,9 +233,9 @@ func main() {
 		if err := ui.Init(); err != nil {
 			log.Fatalf("failed to initialize termui: %v", err)
 		}
-
+		debugger.Reset()
 		if settings.SkipToSample > 0 {
-			dsp.SkipToSampleNumber(settings.SkipToSample)
+			dsp.SkipNumSamples(settings.SkipToSample)
 		}
 	}
 
@@ -341,11 +342,72 @@ func main() {
 	}
 }
 
+func DebugPreFn(opCodes []base.Op, state *dsp.State, sampleNum int) int {
+	debugger.RegisterState(state)
+	debugger.UpdateScreen(opCodes, state, sampleNum)
+	return dsp.Ok
+}
+
+func DebugPostFn(opCodes []base.Op, state *dsp.State, sampleNum int) int {
+	e := debugger.WaitForInput(state)
+	switch e {
+	case "quit":
+		return dsp.Quit
+	case "next op":
+		break
+	case "previous op":
+		// Rewind until we find the closes valid state. Might
+		// be longer than -1 due to SKPs.
+		var prevState *dsp.State = nil
+		for x := state.IP - 1; x >= 0; x-- {
+			ok := false
+			prevState, ok = debugger.GetRegisteredState(x)
+			if ok {
+				break
+			}
+		}
+
+		if prevState != nil {
+			state.Copy(prevState)
+			return dsp.NextInstruction
+		} else {
+			fmt.Println("FATAL: No previous state could be found!")
+			return dsp.Fatal
+		}
+	case "next sample":
+		dsp.SkipNumSamples(1)
+		break
+	case "next 100 samples":
+		dsp.SkipNumSamples(100)
+		break
+	case "next 1000 samples":
+		dsp.SkipNumSamples(1000)
+		break
+	case "next 10000 samples":
+		dsp.SkipNumSamples(10000)
+		break
+	case "next 100000 samples":
+		dsp.SkipNumSamples(100000)
+		break
+	}
+	return dsp.Ok
+}
+
+func NoDebugFn(opCodes []base.Op, state *dsp.State, sampleNum int) int {
+	// Do nothing
+	return dsp.Ok
+}
+
 // Returns an Int-pair (16bits signed)
 func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op, sampleNum int) (float64, float64, bool) {
 	state.GetRegister(base.ADCL).SetFloat64(inLeft)
 	state.GetRegister(base.ADCR).SetFloat64(inRight)
-	cont := dsp.ProcessSample(opCodes, state, sampleNum)
+	cont := true
+	if settings.Debugger && dsp.GetSkipNumSamples() == 0 {
+		cont = dsp.ProcessSample(opCodes, state, sampleNum, DebugPreFn, DebugPostFn)
+	} else {
+		cont = dsp.ProcessSample(opCodes, state, sampleNum, NoDebugFn, NoDebugFn)
+	}
 	outLeft := state.GetRegister(base.DACL).ToFloat64()
 	outRight := state.GetRegister(base.DACR).ToFloat64()
 	return outLeft, outRight, cont

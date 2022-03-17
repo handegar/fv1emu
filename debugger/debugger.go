@@ -1,4 +1,4 @@
-package dsp
+package debugger
 
 import (
 	"fmt"
@@ -10,22 +10,44 @@ import (
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/disasm"
+	"github.com/handegar/fv1emu/dsp"
 	"github.com/handegar/fv1emu/settings"
 )
 
-var lastState *State
+var lastState *dsp.State
 var lastOpCodes []base.Op
 var lastSampleNum int
+
 var showRegistersAsFloats bool = true
 var showHelpScreen bool = false
+var showMemoryMap bool = false
 
-func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
+var previousStates map[uint]*dsp.State = make(map[uint]*dsp.State)
+
+func Reset() {
+	previousStates = make(map[uint]*dsp.State)
+}
+
+func RegisterState(state *dsp.State) {
+	if previousStates[state.IP] == nil {
+		previousStates[state.IP] = state.Duplicate()
+	}
+}
+
+func GetRegisteredState(ip uint) (*dsp.State, bool) {
+	prevState, found := previousStates[ip]
+	return prevState, found
+}
+
+func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 	lastState = state
 	lastOpCodes = opCodes
 	lastSampleNum = sampleNum
 
 	if showHelpScreen {
 		renderHelpScreen()
+	} else if showMemoryMap {
+		renderMemoryMap(state, sampleNum)
 	} else {
 		updateCodeView(opCodes, state)
 		updateStateView(state, sampleNum)
@@ -47,6 +69,57 @@ func UpdateDebuggerScreen(opCodes []base.Op, state *State, sampleNum int) {
 	}
 }
 
+/*
+   Returns the Event.ID string for events which is relevant for others
+   (quit, restart etc.)
+*/
+func WaitForInput(state *dsp.State) string {
+	for e := range ui.PollEvents() {
+		switch e.ID {
+		case "q", "<C-c>", "<Escape>":
+			if showHelpScreen {
+				showHelpScreen = false
+				onTerminalResized()
+			} else if showMemoryMap {
+				showMemoryMap = false
+				onTerminalResized()
+			} else {
+				return "quit"
+			}
+		case "n", "<Down>":
+			return "next op"
+		case "p", "<Up>":
+			if state.IP > 0 {
+				return "previous op"
+			}
+			return WaitForInput(state) // Keep waiting
+		case "s", "<PageDown>":
+			return "next sample"
+		case "S":
+			return "next 100 samples"
+		case "<C-s>":
+			return "next 1000 samples"
+		case "g":
+			return "next 10000 samples"
+		case "G":
+			return "next 100000 samples"
+		case "h", "<F1>", "?":
+			showHelpScreen = !showHelpScreen
+			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
+		case "m", "<F2>":
+			showMemoryMap = !showMemoryMap
+			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
+		case "f":
+			showRegistersAsFloats = !showRegistersAsFloats
+			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
+		case "<Resize>":
+			onTerminalResized()
+		}
+	}
+
+	return ""
+}
+
 func renderHelpScreen() {
 	width, height := termui.TerminalDimensions()
 	ypos := 0
@@ -65,6 +138,7 @@ func renderHelpScreen() {
 
 	keys.Rows = append(keys.Rows, "Keys:")
 	keys.Rows = append(keys.Rows, " h, F1, ?:          [This help-page](fg:white)")
+	keys.Rows = append(keys.Rows, " m, F2:             [Show delay memory map](fg:white)")
 	keys.Rows = append(keys.Rows, " ESC, q, CTRL-C:    [Quit debugger / exit help](fg:white)")
 	keys.Rows = append(keys.Rows, " s, PgDn:           [Next sample](fg:white)")
 	keys.Rows = append(keys.Rows, " SHIFT-s:           [Skip 100 samples](fg:white)")
@@ -105,7 +179,7 @@ func renderHelpScreen() {
 }
 
 // Prints the code with a highlighted current-op
-func updateCodeView(opCodes []base.Op, state *State) {
+func updateCodeView(opCodes []base.Op, state *dsp.State) {
 	width, height := termui.TerminalDimensions()
 
 	width = width / 2
@@ -121,7 +195,7 @@ func updateCodeView(opCodes []base.Op, state *State) {
 	ui.Render(code)
 }
 
-func generateCodeListing(opCodes []base.Op, state *State, screenHeight int) string {
+func generateCodeListing(opCodes []base.Op, state *dsp.State, screenHeight int) string {
 	var lines []string
 	var skpTargets []int
 
@@ -175,7 +249,7 @@ func overflowColored(v float64, min float64, max float64) string {
 }
 
 // Prints all values in the state
-func updateStateView(state *State, sampleNum int) {
+func updateStateView(state *dsp.State, sampleNum int) {
 	twidth, theight := termui.TerminalDimensions()
 	theight = theight - 1 // Save one for the keys line
 
@@ -211,20 +285,20 @@ func updateStateView(state *State, sampleNum int) {
 		"[SIN1](fg:yellow)  [Rate:](fg:cyan) %d (%f)  [\u03B11:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f)\n",
 		state.Registers[base.SIN0_RATE].Value, state.Registers[base.SIN0_RATE].ToFloat64(),
-		GetLFOValue(0, state, false),
+		dsp.GetLFOValue(0, state, false),
 		state.Registers[base.SIN0_RANGE].Value, state.Registers[base.SIN0_RANGE].ToFloat64(),
 		state.Registers[base.SIN1_RATE].Value, state.Registers[base.SIN1_RATE].ToFloat64(),
-		GetLFOValue(1, state, false),
+		dsp.GetLFOValue(1, state, false),
 		state.Registers[base.SIN1_RANGE].Value, state.Registers[base.SIN1_RANGE].ToFloat64())
 	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d (%f)  [\u03940:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f)\n"+
 		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d (%f)  [\u03941:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f)",
 		state.Registers[base.RAMP0_RATE].Value, state.Registers[base.RAMP0_RATE].ToFloat64(),
-		GetLFOValue(2, state, false),
+		dsp.GetLFOValue(2, state, false),
 		state.Registers[base.RAMP0_RANGE].Value, state.Registers[base.RAMP0_RANGE].ToFloat64(),
 		state.Registers[base.RAMP1_RATE].Value, state.Registers[base.RAMP1_RATE].ToFloat64(),
-		GetLFOValue(3, state, false),
+		dsp.GetLFOValue(3, state, false),
 		state.Registers[base.RAMP1_RANGE].Value, state.Registers[base.RAMP1_RANGE].ToFloat64())
 
 	vPos := 0
@@ -277,7 +351,7 @@ func updateStateView(state *State, sampleNum int) {
 }
 
 // Prints misc info regarding current state and op
-func updateMetaInfoView(opCodes []base.Op, state *State) {
+func updateMetaInfoView(opCodes []base.Op, state *dsp.State) {
 	op := opCodes[state.IP]
 	opDoc := disasm.OpDocs[op.Name]
 
@@ -307,52 +381,7 @@ func updateMetaInfoView(opCodes []base.Op, state *State) {
 	ui.Render(versionP)
 }
 
-/*
-   Returns the Event.ID string for events which is relevant for others
-   (quit, restart etc.)
-*/
-func WaitForDebuggerInput(state *State) string {
-	for e := range ui.PollEvents() {
-		switch e.ID {
-		case "q", "<C-c>", "<Escape>":
-			if showHelpScreen {
-				showHelpScreen = false
-				onTerminalResized()
-			} else {
-				return "quit"
-			}
-		case "n", "<Down>":
-			return "next op"
-		case "p", "<Up>":
-			if state.IP > 0 {
-				return "previous op"
-			}
-			return WaitForDebuggerInput(state) // Keep waiting
-		case "s", "<PageDown>":
-			return "next sample"
-		case "S":
-			return "next 100 samples"
-		case "<C-s>":
-			return "next 1000 samples"
-		case "g":
-			return "next 10000 samples"
-		case "G":
-			return "next 100000 samples"
-		case "h", "<F1>", "?":
-			showHelpScreen = !showHelpScreen
-			UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)
-		case "f":
-			showRegistersAsFloats = !showRegistersAsFloats
-			UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)
-		case "<Resize>":
-			onTerminalResized()
-		}
-	}
-
-	return ""
-}
-
 func onTerminalResized() {
 	termui.Clear()
-	UpdateDebuggerScreen(lastOpCodes, lastState, lastSampleNum)
+	UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 }

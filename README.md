@@ -3,9 +3,11 @@
 A simple Spin FV-1 DSP emulator written in GOLang. It has a built-in
 debugger for step-by-step evaluating and state inspection.
 
+
 ## License
 
     MIT License
+
 
 ## Current state
 
@@ -22,18 +24,15 @@ The emulator has currently only been compiled and tested on
 Ubuntu/Linux.
 
 
-
 ## Dependencies
 
 All dependencies are listed in "go.mod"
-
 
 
 ## Compiling
 
     $ go mod download
     $ go build
-
 
 
 ## Usage
@@ -76,7 +75,6 @@ All dependencies are listed in "go.mod"
     $ ./fv1emu --in INPUT.WAV --out OUTPUT.WAV --bin ALGO.BIN 
 
 
-
 ## Debugger
 
 It is possible to step-debug an FV-1 program by using the *'-debug'*
@@ -86,17 +84,19 @@ registers of the system. The debugger is terminal-based.
 ![Debugger](/debugger-screenshot.png)
 
 
-
 ## TODOs
 
- - Calibrate the LFO with an actual FV-1 dsp.
+ - Calibrate the LFO with an actual FV-1 DSP.
  - Get the Ramp-LFO right.
+ - Visualize read/writes to SDRAM
  - Test on MacOS and Windows.
  - Better streaming, preferably realtime streaming.
  - Realtime processing of an input stream.
    - Add functionality for changing the POT-values at runtime.
  - Let the user set the external clock-speed to other frequencies than
    the default.
+ - Add scripted change-patterns to the realtime clock (like the EQD
+   Afterneath).
 
 
 ## Links
@@ -104,7 +104,6 @@ registers of the system. The debugger is terminal-based.
  - A test-suite for the FV-1: https://github.com/ndf-zz/fv1testing
 
  - A Python based FV-1 assembler: https://github.com/ndf-zz/asfv1
-
 
 
 ## Notes
