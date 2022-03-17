@@ -1,0 +1,15 @@
+	;;
+	;; Fra SPIN sitt forum
+	;; http://www.spinsemi.com/forum/viewtopic.php?f=3&t=921
+	;;
+	;; Gir en sinus med periode på 340ms når POT0=1, og 5.7s med POT0=0
+	;;
+
+	skp	RUN, start
+	wlds	SIN0, 0, 1 ;32767
+start:  
+	rdax	POT0, 0.1
+	wrax	SIN0_RATE, 0
+	cho	rdal, SIN0
+	wrax	dacl, 0
+ 

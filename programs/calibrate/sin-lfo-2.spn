@@ -1,0 +1,18 @@
+ ;;; Ref: https://github.com/eh2k/vcvrack-fv1-emu/issues/9
+
+	skp     run,START
+	wlds    SIN0,125,0
+
+START:         
+	ldax    POT0
+	wrax    SIN0_RANGE, 0
+
+	rdax    POT1, 0.7338
+	sof     1.0, 0.2446
+	wrax    SIN0_RATE, 0
+
+	cho     rdal, SIN0
+	wrax    DACL, 0
+
+	cho     rdal,SIN0
+	wrax    DACR,0
