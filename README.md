@@ -94,7 +94,8 @@ The debugger also has a simple Delay Memory inspector.
    the debugger
  - Test on MacOS and Windows.
  - Better streaming, preferably realtime streaming.
- - Realtime processing of an input stream.
+ - Realtime processing of an input-stream like another app or
+   a microphone.
    - Add functionality for changing the POT-values at runtime.
  - Export CSV/Excel tables with register values for each sample
    - Nice to visualize in external graphing programs. LFO shapes etc.

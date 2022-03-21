@@ -208,6 +208,8 @@ func main() {
 		disasm.PrintCodeListing(opCodes)
 	}
 
+	printPotentiometersInUse(opCodes)
+
 	f, stream, wavFormat, err := reader.ReadWAV(settings.InputWav)
 	defer f.Close()
 
@@ -411,4 +413,27 @@ func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []
 	outLeft := state.GetRegister(base.DACL).ToFloat64()
 	outRight := state.GetRegister(base.DACR).ToFloat64()
 	return outLeft, outRight, cont
+}
+
+func printPotentiometersInUse(opCodes []base.Op) {
+	pot0used, pot1used, pot2used := dsp.UsesPotentiometers(opCodes)
+
+	var pots []string
+	if pot0used {
+		pots = append(pots, "POT0")
+	}
+	if pot1used {
+		pots = append(pots, "POT1")
+	}
+	if pot2used {
+		pots = append(pots, "POT2")
+	}
+
+	if len(pots) == 0 {
+		color.Cyan("* No potentiometers in use.\n")
+	} else {
+		color.Cyan("* Potentiometers in use: %s\n", strings.Join(pots, ", "))
+
+	}
+
 }

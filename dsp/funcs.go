@@ -371,15 +371,3 @@ func capDelayRAMIndex(in int, state *State) (int, error) {
 
 	return in & (DELAY_RAM_SIZE - 1), err
 }
-
-/*
-func clampInteger(in int) int {
-	if in > 0x7fffff {
-		return 0x7fffff
-	}
-	if in < -0x800000 {
-		return -0x800000
-	}
-	return in
-}
-*/

@@ -87,3 +87,28 @@ func DecodeOpCodes(buffer []uint32) []base.Op {
 
 	return ret
 }
+
+// Figure out which potentiometers which are in use
+func UsesPotentiometers(ops []base.Op) (bool, bool, bool) {
+	pot0 := false
+	pot1 := false
+	pot2 := false
+
+	for _, op := range ops {
+		if op.Name == "RDAX" && op.Args[0].RawValue == base.POT0 {
+			pot0 = true
+		} else if op.Name == "RDAX" && op.Args[0].RawValue == base.POT1 {
+			pot1 = true
+		} else if op.Name == "RDAX" && op.Args[0].RawValue == base.POT2 {
+			pot2 = true
+		} else if op.Name == "MULX" && op.Args[0].RawValue == base.POT0 {
+			pot0 = true
+		} else if op.Name == "MULX" && op.Args[0].RawValue == base.POT1 {
+			pot1 = true
+		} else if op.Name == "MULX" && op.Args[0].RawValue == base.POT2 {
+			pot2 = true
+		}
+	}
+
+	return pot0, pot1, pot2
+}
