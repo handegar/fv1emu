@@ -46,6 +46,29 @@ func (r *Register) Clear() *Register {
 	return r
 }
 
+func (r *Register) SetToMax24Bit() *Register {
+	r.Value = 0x7fffff
+	return r
+}
+
+func (r *Register) SetToMin24Bit() *Register {
+	r.Value = -0x800000
+	return r
+}
+
+// Returns TRUE on second value if value were clamped
+func (r *Register) Clamp24Bit() (*Register, bool) {
+	overfloweth := false
+	if r.Value > 0x7fffff {
+		r.Value = 0x7fffff
+		overfloweth = true
+	} else if r.Value < -0x800000 {
+		r.Value = -0x800000
+		overfloweth = true
+	}
+	return r, overfloweth
+}
+
 func (r *Register) extendSign() {
 	// Shift all the way to the left to make the sign-bit "stick"
 	shl := (31 - (r.IntBits + r.FractionBits))
@@ -108,11 +131,13 @@ func (r *Register) Copy(reg *Register) *Register {
 
 func (r *Register) Add(reg *Register) *Register {
 	r.Value += reg.Value
+	r.Clamp24Bit()
 	return r
 }
 
 func (r *Register) Sub(reg *Register) *Register {
 	r.Value -= reg.Value
+	r.Clamp24Bit()
 	return r
 }
 
@@ -120,6 +145,7 @@ func (r *Register) Mult(reg *Register) *Register {
 	v1 := int64(r.Value)
 	v2 := int64(reg.Value)
 	r.Value = int32((v1 * v2) >> 23)
+	r.Clamp24Bit()
 	return r
 }
 
