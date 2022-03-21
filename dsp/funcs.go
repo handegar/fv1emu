@@ -1,6 +1,7 @@
 package dsp
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -42,7 +43,7 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 
 		op := opCodes[state.IP]
 
-		if skipNumSamples <= 1 {
+		if skipNumSamples < 1 {
 			debugPre(opCodes, state, sampleNum)
 		}
 
@@ -105,7 +106,8 @@ func updateSinLFO(state *State) {
 
 	// FIXME: What is the correct value here? (20220310 handegar)
 	// 168.0: Tuned "sin-lfo.spn" to 100Hz for POT1=0.0
-	x := 168.0
+	// 8.0: Tuned "misc/tremolo-1.spn" to get a credible max/min-rate
+	x := 8.0
 
 	// Update Sine-LFOs
 	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) * x
@@ -124,7 +126,8 @@ func updateRampLFO(state *State) {
 
 	// FIXME: What is the correct value here? (20220310 handegar)
 	// - 56.0: To get the "ramp-lfo.spn" to get 100Hz with POT1=0.0
-	x := 56.0
+	// - 16385.0: Handtuning OEM1_6.bin (flanger) (half clockspeed?)
+	x := 16385.0
 
 	state.Ramp0State.Value += (1.0 / rate0) / x
 	state.Ramp1State.Value += (1.0 / rate1) / x
@@ -175,11 +178,14 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
   Return a LFO value scaled with the amplitude value specified in the state
 */
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
-	// FIXME: Get these right (20220311 handegar)
-	// 32.0: Handtuned by listening to the OEM programs from SpinSEMI
+	// FIXME: Get this right (20220311 handegar)
 	// 2.0: The tri-lfo.spn program.
-	sinX := 2.0
-	rmpX := 2.0
+	// 32.0: misc/tremolo-1.spn & misc/chorus-2.spn
+	sinX := 32.0
+
+	// FIXME: Get this right (20220311 handegar)
+	// Set to 1.0 as ramp-range only has 4 values anyways?
+	rmpX := 1.0
 
 	amp := 1.0
 	switch lfoType {
@@ -200,16 +206,25 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
   Will "normalize" the LFO value to a number between [-1 .. 1]
 */
 func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
+	// Which value is correct?
+	// 1<<6: Handtuned "misc/tremolo-2.spn"
+	// 1<<8: Handtuned "misc/tremolo-1.spn"
+	sinFactor := float64((1 << 8) - 1)
+
+	// Which value is correct?
+	// 1<<11: Handtuned "calibrate/ramp-lfo.spn"
+	rampFactor := float64((1 << 11) - 1)
+
 	ret := 0.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		ret = value / float64((1<<16)-1)
+		ret = value / sinFactor
 	case base.LFO_SIN1, base.LFO_COS1:
-		ret = value / float64((1<<16)-1)
+		ret = value / sinFactor
 	case base.LFO_RMP0:
-		ret = value / float64((1<<11)-1)
+		ret = value / rampFactor
 	case base.LFO_RMP1:
-		ret = value / float64((1<<11)-1)
+		ret = value / rampFactor
 	}
 
 	return ret
@@ -348,19 +363,16 @@ func GetRampRange(typ int, state *State) float64 {
 // Ensure the DelayRAM index is within bounds
 func capDelayRAMIndex(in int, state *State) (int, error) {
 	var err error = nil
-	/*
-		if in > DELAY_RAM_SIZE {
-			err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (len=%d)",
-				in, DELAY_RAM_SIZE))
-		}
-	*/
-	for in > DELAY_RAM_SIZE {
-		in = in - DELAY_RAM_SIZE
+
+	if in > DELAY_RAM_SIZE {
+		err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (len=%d)",
+			in, DELAY_RAM_SIZE))
 	}
 
-	return in & 0x7fff, err
+	return in & (DELAY_RAM_SIZE - 1), err
 }
 
+/*
 func clampInteger(in int) int {
 	if in > 0x7fffff {
 		return 0x7fffff
@@ -370,3 +382,4 @@ func clampInteger(in int) int {
 	}
 	return in
 }
+*/
