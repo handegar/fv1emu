@@ -50,7 +50,7 @@ var opTable = map[string]interface{}{
 		state.PACC.Copy(state.ACC)
 		acc := state.ACC.ToFloat64()
 		if acc >= 0 {
-			state.ACC.SetFloat64(0.9999998807907104).Mult(state.workReg1_14).Add(state.workReg0_10)
+			state.ACC.SetToMax24Bit().Mult(state.workReg1_14).Add(state.workReg0_10)
 		} else {
 			acc = acc * 16.0
 			state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
@@ -137,7 +137,7 @@ var opTable = map[string]interface{}{
 	},
 	"RMPA": func(op base.Op, state *State) error {
 		state.workReg1_9.SetWithIntsAndFracs(op.Args[1].RawValue, 1, 9) // C
-		addr := state.GetRegister(base.ADDR_PTR).ToInt32()              // ADDR_PTR
+		addr := state.GetRegister(base.ADDR_PTR).ToInt32() >> 8         // ADDR_PTR
 		idx, err := capDelayRAMIndex(int(addr)+state.DelayRAMPtr, state)
 		if err != nil {
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
@@ -230,11 +230,9 @@ var opTable = map[string]interface{}{
 			}
 			reg.SetInt32(accAsInt >> (24 - 14))
 		} else if regNo == base.ADDR_PTR {
-			addrPtr := accAsInt >> 8 // Shift down value to actual int-range
-			utils.Assert(addrPtr < ((1<<16)-1),
-				"The ADDR_PTR register cannot hold a value larger "+
-					"than the delay memory size (32k)")
-			reg.SetInt32(addrPtr)
+			// This value will be down-scaled when used as
+			// we can only address 32768 memory bytes
+			reg.SetInt32(accAsInt)
 		} else { // Just a regular WRAX with ACC as a floating point value
 			reg.Copy(state.ACC)
 		}
@@ -424,7 +422,9 @@ var opTable = map[string]interface{}{
 			}
 			state.workRegB.SetFloat64(xfade)
 
-			delayIndex := addr + int(ScaleLFOValue(lfo, typ, state))
+			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+			delayIndex := addr + int(normLFO)
 			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 			if err != nil {
 				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
@@ -434,7 +434,8 @@ var opTable = map[string]interface{}{
 			state.ACC.Add(state.workRegA.Mult(state.workRegB))
 		} else {
 			scaledLFO := ScaleLFOValue(lfo, typ, state)
-			delayIndex := addr + int(scaledLFO)
+			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+			delayIndex := addr + int(normLFO)
 			idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 			if err != nil {
 				return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
