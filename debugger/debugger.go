@@ -24,6 +24,8 @@ var showMemoryMap bool = false
 
 var previousStates map[uint]*dsp.State = make(map[uint]*dsp.State)
 
+var memoryCursor int = 0
+
 func Reset() {
 	previousStates = make(map[uint]*dsp.State)
 }
@@ -47,7 +49,7 @@ func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 	if showHelpScreen {
 		renderHelpScreen()
 	} else if showMemoryMap {
-		renderMemoryMap(state, sampleNum)
+		renderMemoryMap(state, sampleNum, memoryCursor)
 	} else {
 		updateCodeView(opCodes, state)
 		updateStateView(state, sampleNum)
@@ -93,6 +95,14 @@ func WaitForInput(state *dsp.State) string {
 				return "previous op"
 			}
 			return WaitForInput(state) // Keep waiting
+		case "6":
+			increaseMemoryCursor(1)
+		case "4":
+			decreaseMemoryCursor(1)
+		case "2":
+			increaseMemoryCursor(128)
+		case "8":
+			decreaseMemoryCursor(128)
 		case "s", "<PageDown>":
 			return "next sample"
 		case "S":
@@ -120,6 +130,28 @@ func WaitForInput(state *dsp.State) string {
 	return ""
 }
 
+func increaseMemoryCursor(count int) {
+	memoryCursor += calculateMemoryValuesPerChar() * count
+	if memoryCursor >= dsp.DELAY_RAM_SIZE {
+		memoryCursor = memoryCursor - dsp.DELAY_RAM_SIZE
+	}
+
+	if showMemoryMap {
+		onTerminalResized()
+	}
+}
+
+func decreaseMemoryCursor(count int) {
+	memoryCursor -= calculateMemoryValuesPerChar() * count
+	if memoryCursor < 0 {
+		memoryCursor = dsp.DELAY_RAM_SIZE + memoryCursor
+	}
+
+	if showMemoryMap {
+		onTerminalResized()
+	}
+}
+
 func renderHelpScreen() {
 	width, height := termui.TerminalDimensions()
 	ypos := 0
@@ -138,12 +170,16 @@ func renderHelpScreen() {
 
 	keys.Rows = append(keys.Rows, "Keys:")
 	keys.Rows = append(keys.Rows, " h, F1, ?:          [This help-page](fg:white)")
-	keys.Rows = append(keys.Rows, " m, F2:             [Show delay memory map](fg:white)")
 	keys.Rows = append(keys.Rows, " ESC, q, CTRL-C:    [Quit debugger / exit help](fg:white)")
+	keys.Rows = append(keys.Rows, " m, F2:             [Show delay memory map](fg:white)")
+	keys.Rows = append(keys.Rows, " 6 (Keypad right):  [Memory map: Next position](fg:white)")
+	keys.Rows = append(keys.Rows, " 4 (Keypad left):   [Memory map: Prev position](fg:white)")
+	keys.Rows = append(keys.Rows, " 8 (Keypad up):     [Memory map: Back 128 positions](fg:white)")
+	keys.Rows = append(keys.Rows, " 2 (Keypad down):   [Memory map: Skip 128 positions](fg:white)")
 	keys.Rows = append(keys.Rows, " s, PgDn:           [Next sample](fg:white)")
 	keys.Rows = append(keys.Rows, " SHIFT-s:           [Skip 100 samples](fg:white)")
 	keys.Rows = append(keys.Rows, " CTRL-s:            [Skip 1000 samples](fg:white)")
-	keys.Rows = append(keys.Rows, " g:                 [Skip 10000 samples](fg:white)")
+	keys.Rows = append(keys.Rows, " g:                 [Skip 10.000 samples](fg:white)")
 	keys.Rows = append(keys.Rows, " SHIFT-g:           [Skip 100.000 samples](fg:white)")
 	keys.Rows = append(keys.Rows, " n, DownKey:        [Next instruction](fg:white)")
 	keys.Rows = append(keys.Rows, " p, UpKey:          [Previous instruction (within current sample)](fg:white)")
@@ -160,15 +196,14 @@ func renderHelpScreen() {
 		" [PACC](fg:yellow):         Accumulator from the previous sample/state.\n" +
 		" [LR](fg:yellow):           Last read sample read from the delay memory.\n" +
 		" [ADDR_PTR](fg:yellow):     Special memory-pointer register.\n" +
-		" [DelayRAMPtr](fg:yellow):  Decreasing memory pointer. Decreases by for one each sample.\n" +
+		" [DelayRAMPtr](fg:yellow):  Decreasing memory pointer. Decreases by one each sample.\n" +
 		"               Restarts as 32768 when reaching 0.\n" +
-		" [RF](fg:yellow):           Run flag, only false for the first sample, then always\n" +
-		"               true (0/1).\n" +
+		" [RF](fg:yellow):           Run flag. False during the first sample, then True\n" +
 		" [ADCL](fg:yellow):         Input value (left)\n" +
 		" [ADCR](fg:yellow):         Input value (right)\n" +
 		" [DACL](fg:yellow):         Output value (left)\n" +
 		" [DACR](fg:yellow):         Output value (right)\n" +
-		" [POT0-3](fg:yellow):       The current potentiometer values [0 .. 1.0]\n"
+		" [POT0-3](fg:yellow):       Potentiometer value [0 .. 1.0]\n"
 
 	help.SetRect(1, ypos, width-1, ypos+(height-ypos)-12)
 	ypos += 12
@@ -265,7 +300,7 @@ func updateStateView(state *dsp.State, sampleNum int) {
 		overflowColored(state.ACC.ToFloat64(), -2.0, 2.0), state.ACC.Value,
 		overflowColored(state.PACC.ToFloat64(), -2.0, 2.0),
 		overflowColored(state.LR.ToFloat64(), -1.0, 1.0),
-		state.Registers[base.ADDR_PTR].Value,
+		int(state.Registers[base.ADDR_PTR].ToInt32())>>8,
 		state.DelayRAMPtr,
 		rfInt)
 
