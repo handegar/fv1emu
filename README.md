@@ -83,16 +83,21 @@ registers of the system. The debugger is terminal-based.
 
 ![Debugger](/debugger-screenshot.png)
 
+The debugger also has a simple Delay Memory inspector.
+
 
 ## TODOs
 
  - Calibrate the LFO with an actual FV-1 DSP.
  - Get the Ramp-LFO right.
- - Visualize read/writes to SDRAM
+ - Catch overflows within operations (the register.Clamp24Bit() function) and show warnings in 
+   the debugger
  - Test on MacOS and Windows.
  - Better streaming, preferably realtime streaming.
  - Realtime processing of an input stream.
    - Add functionality for changing the POT-values at runtime.
+ - Export CSV/Excel tables with register values for each sample
+   - Nice to visualize in external graphing programs. LFO shapes etc.
  - Let the user set the external clock-speed to other frequencies than
    the default.
  - Add scripted change-patterns to the realtime clock (like the EQD
