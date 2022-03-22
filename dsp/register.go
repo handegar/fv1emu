@@ -3,6 +3,8 @@ package dsp
 import (
 	"fmt"
 	"math"
+
+	"github.com/handegar/fv1emu/settings"
 )
 
 /**
@@ -58,6 +60,10 @@ func (r *Register) SetToMin24Bit() *Register {
 
 // Returns TRUE on second value if value were clamped
 func (r *Register) Clamp24Bit() (*Register, bool) {
+	if settings.Disable24BitsClamping { // Shall we not perform clamping?
+		return r, false
+	}
+
 	overfloweth := false
 	if r.Value > 0x7fffff {
 		r.Value = 0x7fffff

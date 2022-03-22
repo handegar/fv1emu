@@ -39,16 +39,43 @@ type WavStatistics struct {
 }
 
 func parseCommandLineParameters() {
-	flag.StringVar(&settings.InFilename, "bin", settings.InFilename,
-		"FV-1 binary file")
-	flag.StringVar(&settings.InFilename, "hex", settings.InFilename,
-		"SpinCAD/Intel HEX file")
-	flag.StringVar(&settings.InputWav, "in", settings.InputWav,
-		"Input wav-file")
-	flag.StringVar(&settings.OutputWav, "out", settings.OutputWav,
-		"Output wav-file")
-	flag.BoolVar(&settings.Stream, "stream", settings.Stream,
-		"Stream output to sound device")
+	flag.StringVar(&settings.InFilename, "bin",
+		settings.InFilename, "FV-1 binary file")
+	flag.StringVar(&settings.InFilename, "hex",
+		settings.InFilename, "SpinCAD/Intel HEX file")
+	flag.StringVar(&settings.InputWav, "in",
+		settings.InputWav, "Input wav-file")
+	flag.StringVar(&settings.OutputWav, "out",
+		settings.OutputWav, "Output wav-file")
+	flag.BoolVar(&settings.Stream, "stream",
+		settings.Stream, "Stream output to sound device")
+
+	//
+	// Potentimeters settings
+	//
+	var allPotsToMax bool = false
+	flag.BoolVar(&allPotsToMax, "pmax",
+		allPotsToMax, "Set all potentiometers to maximum")
+	var allPotsToMin bool = false
+	flag.BoolVar(&allPotsToMin, "pmin",
+		allPotsToMin, "Set all potentiometers to minimum")
+
+	if allPotsToMax {
+		settings.Pot0Value = 1.0
+		settings.Pot1Value = 1.0
+		settings.Pot2Value = 1.0
+	} else if allPotsToMin {
+		settings.Pot0Value = 0
+		settings.Pot1Value = 0
+		settings.Pot2Value = 0
+	}
+
+	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value,
+		"Potentiometer 0 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value,
+		"Potentiometer 1 value (0 .. 1.0)")
+	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value,
+		"Potentiometer 2 value (0 .. 1.0)")
 
 	// FIXME: Not fully implemented yet (20220305 handegar)
 	/*
@@ -59,32 +86,27 @@ func parseCommandLineParameters() {
 	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds,
 		"Additional trail length (seconds)")
 
-	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value,
-		"Potentiometer 0 value (0 .. 1.0)")
-	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value,
-		"Potentiometer 1 value (0 .. 1.0)")
-	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value,
-		"Potentiometer 2 value (0 .. 1.0)")
-
-	flag.BoolVar(&settings.Debugger, "debug", settings.Debugger,
+	flag.BoolVar(&settings.Debugger, "debug",
+		settings.Debugger,
 		"Enable step-debugger user-interface")
-	flag.IntVar(&settings.SkipToSample, "skip-to", settings.SkipToSample,
+
+	flag.IntVar(&settings.SkipToSample, "skip-to",
+		settings.SkipToSample,
 		"Skip to sample number (when debugging)")
 
-	flag.BoolVar(&settings.PrintCode, "print-code", settings.PrintCode,
-		"Print program code")
+	flag.BoolVar(&settings.Disable24BitsClamping, "disable-24bits-clamping",
+		settings.Disable24BitsClamping,
+		"Disable clamping of register values to 24-bits but use the entire 32-bits range.")
 
-	flag.BoolVar(&settings.PrintDebug, "print-debug", settings.PrintDebug,
-		"Print additional info when debugging")
+	flag.BoolVar(&settings.PrintCode, "print-code",
+		settings.PrintCode, "Print program code")
 
-	var allPotsToMax bool = false
-	flag.BoolVar(&allPotsToMax, "pmax", allPotsToMax,
-		"Set all potentiometers to maximum")
-	var allPotsToMin bool = false
-	flag.BoolVar(&allPotsToMin, "pmin", allPotsToMin,
-		"Set all potentiometers to minimum")
+	flag.BoolVar(&settings.PrintDebug, "print-debug",
+		settings.PrintDebug, "Print additional info when debugging")
 
-	// Debug stuff
+	//
+	// Debug stuff. Mostly relevant when bugfixing fv1emu itself.
+	//
 	flag.BoolVar(&settings.CHO_RDAL_is_NA, "cho-rdal-is-NA", settings.CHO_RDAL_is_NA,
 		"DEBUG: The 'CHO RDAL' op will output the NA crossfade envelope for RMP0")
 	flag.BoolVar(&settings.CHO_RDAL_is_RPTR2, "cho-rdal-is-RPTR2", settings.CHO_RDAL_is_RPTR2,
@@ -95,18 +117,6 @@ func parseCommandLineParameters() {
 		"DEBUG: The 'CHO RDAL' op will output the COS envelope for SIN0")
 
 	flag.Parse()
-
-	if allPotsToMax {
-		fmt.Println("* Setting all potentiometers to max")
-		settings.Pot0Value = 1.0
-		settings.Pot1Value = 1.0
-		settings.Pot2Value = 1.0
-	} else if allPotsToMin {
-		fmt.Println("* Setting all potentiometers to min")
-		settings.Pot0Value = 0
-		settings.Pot1Value = 0
-		settings.Pot2Value = 0
-	}
 }
 
 func updateWavStatistics(sampleNum int, left float64, right float64, statistics *WavStatistics) {
@@ -421,13 +431,13 @@ func printPotentiometersInUse(opCodes []base.Op) {
 
 	var pots []string
 	if pot0used {
-		pots = append(pots, "POT0")
+		pots = append(pots, fmt.Sprintf("POT0=%.3f", settings.Pot0Value))
 	}
 	if pot1used {
-		pots = append(pots, "POT1")
+		pots = append(pots, fmt.Sprintf("POT1=%.3f", settings.Pot1Value))
 	}
 	if pot2used {
-		pots = append(pots, "POT2")
+		pots = append(pots, fmt.Sprintf("POT2=%.3f", settings.Pot2Value))
 	}
 
 	if len(pots) == 0 {
