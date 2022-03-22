@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,7 +40,7 @@ type WavStatistics struct {
 	NumSamples int
 }
 
-func parseCommandLineParameters() {
+func parseCommandLineParameters() bool {
 	flag.StringVar(&settings.InFilename, "bin",
 		settings.InFilename, "FV-1 binary file")
 	flag.StringVar(&settings.InFilename, "hex",
@@ -117,6 +119,28 @@ func parseCommandLineParameters() {
 		"DEBUG: The 'CHO RDAL' op will output the COS envelope for SIN0")
 
 	flag.Parse()
+
+	if flag.NFlag() == 0 {
+		fmt.Printf("  Type \"./%s -help\" for more info.\n", filepath.Base(os.Args[0]))
+		return false
+	}
+
+	if settings.InFilename == "" {
+		fmt.Println("  No bin/hex file specified. Use the '-bin/-hex' parameter.")
+		return false
+	}
+
+	if settings.InputWav == "" {
+		fmt.Println("  No input WAV file specified. Use the '-in' parameter.")
+		return false
+	}
+
+	if settings.OutputWav == "" {
+		fmt.Println("  No output WAV file specified. Use the '-out' parameter.")
+		return false
+	}
+
+	return true
 }
 
 func updateWavStatistics(sampleNum int, left float64, right float64, statistics *WavStatistics) {
@@ -173,20 +197,7 @@ func printWavStatistics(statistics *WavStatistics) {
 
 func main() {
 	fmt.Printf("* FV-1 emulator v%s\n", settings.Version)
-	parseCommandLineParameters()
-
-	if settings.InFilename == "" {
-		fmt.Println("No bin/hex file specified. Use the '-bin/-hex' parameter.")
-		return
-	}
-
-	if settings.InputWav == "" {
-		fmt.Println("No input WAV file specified. Use the '-in' parameter.")
-		return
-	}
-
-	if settings.OutputWav == "" {
-		fmt.Println("No output WAV file specified. Use the '-out' parameter.")
+	if !parseCommandLineParameters() {
 		return
 	}
 
