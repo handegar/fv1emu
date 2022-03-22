@@ -88,27 +88,60 @@ func DecodeOpCodes(buffer []uint32) []base.Op {
 	return ret
 }
 
-// Figure out which potentiometers which are in use
-func UsesPotentiometers(ops []base.Op) (bool, bool, bool) {
+// Figure out which potentiometers are in use
+func PotentiometersInUse(ops []base.Op) (bool, bool, bool) {
 	pot0 := false
 	pot1 := false
 	pot2 := false
 
 	for _, op := range ops {
-		if op.Name == "RDAX" && op.Args[0].RawValue == base.POT0 {
-			pot0 = true
-		} else if op.Name == "RDAX" && op.Args[0].RawValue == base.POT1 {
-			pot1 = true
-		} else if op.Name == "RDAX" && op.Args[0].RawValue == base.POT2 {
-			pot2 = true
-		} else if op.Name == "MULX" && op.Args[0].RawValue == base.POT0 {
-			pot0 = true
-		} else if op.Name == "MULX" && op.Args[0].RawValue == base.POT1 {
-			pot1 = true
-		} else if op.Name == "MULX" && op.Args[0].RawValue == base.POT2 {
-			pot2 = true
+		if op.Name == "RDAX" {
+			pot0 = op.Args[0].RawValue == base.POT0 || pot0
+			pot1 = op.Args[0].RawValue == base.POT1 || pot1
+			pot2 = op.Args[0].RawValue == base.POT2 || pot2
+		} else if op.Name == "MULX" {
+			pot0 = op.Args[0].RawValue == base.POT0 || pot0
+			pot1 = op.Args[0].RawValue == base.POT1 || pot1
+			pot2 = op.Args[0].RawValue == base.POT2 || pot2
+		} else if op.Name == "LDAX" && op.Args[0].RawValue == base.POT0 {
+			pot0 = op.Args[0].RawValue == base.POT0 || pot0
+			pot1 = op.Args[0].RawValue == base.POT1 || pot1
+			pot2 = op.Args[0].RawValue == base.POT2 || pot2
 		}
 	}
 
 	return pot0, pot1, pot2
+}
+
+// Figure out which DACs are in use
+func DACsInUse(ops []base.Op) (bool, bool) {
+	dacr := false
+	dacl := false
+
+	for _, op := range ops {
+		if op.Name == "WRAX" {
+			dacr = op.Args[0].RawValue == base.DACR || dacr
+			dacl = op.Args[0].RawValue == base.DACL || dacl
+		}
+	}
+
+	return dacr, dacl
+}
+
+// Figure out which DACs are in use
+func ADCsInUse(ops []base.Op) (bool, bool) {
+	adcr := false
+	adcl := false
+
+	for _, op := range ops {
+		if op.Name == "RDAX" {
+			adcr = op.Args[0].RawValue == base.DACR || adcr
+			adcl = op.Args[0].RawValue == base.DACL || adcl
+		} else if op.Name == "MULX" {
+			adcr = op.Args[0].RawValue == base.DACR || adcr
+			adcl = op.Args[0].RawValue == base.DACL || adcl
+		}
+	}
+
+	return adcr, adcl
 }

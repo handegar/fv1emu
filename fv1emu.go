@@ -209,6 +209,7 @@ func main() {
 	}
 
 	printPotentiometersInUse(opCodes)
+	printDACsAndADCsInUse(opCodes)
 
 	f, stream, wavFormat, err := reader.ReadWAV(settings.InputWav)
 	defer f.Close()
@@ -416,7 +417,7 @@ func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []
 }
 
 func printPotentiometersInUse(opCodes []base.Op) {
-	pot0used, pot1used, pot2used := dsp.UsesPotentiometers(opCodes)
+	pot0used, pot1used, pot2used := dsp.PotentiometersInUse(opCodes)
 
 	var pots []string
 	if pot0used {
@@ -435,5 +436,35 @@ func printPotentiometersInUse(opCodes []base.Op) {
 		color.Cyan("* Potentiometers in use: %s\n", strings.Join(pots, ", "))
 
 	}
+}
 
+func printDACsAndADCsInUse(opCodes []base.Op) {
+	dacr, dacl := dsp.DACsInUse(opCodes)
+	adcr, adcl := dsp.ADCsInUse(opCodes)
+
+	var lst []string
+	if dacl {
+		lst = append(lst, "DACL")
+	}
+	if dacr {
+		lst = append(lst, "DACR")
+	}
+	if len(lst) == 0 {
+		color.Red("* No DACs in use. The program will generate no sound.")
+	} else {
+		color.Cyan("* DACs in use: %s\n", strings.Join(lst, ", "))
+	}
+
+	lst = []string{}
+	if adcl {
+		lst = append(lst, "ADCL")
+	}
+	if adcr {
+		lst = append(lst, "ADCR")
+	}
+	if len(lst) == 0 {
+		color.Yellow("* No ADCs in use. The program takes no input.")
+	} else {
+		color.Cyan("* ADCs in use: %s\n", strings.Join(lst, ", "))
+	}
 }
