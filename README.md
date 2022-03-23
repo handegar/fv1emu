@@ -37,40 +37,42 @@ All dependencies are listed in "go.mod"
 
 ## Usage
 
-    $ ./fv1emu --help
-     * FV-1 emulator v0.1
-     Usage of ./fv1emu:
-     -bin string
-    	FV-1 binary file
-     -debug
-    	Enable step-debugger user-interface
-     -hex string
-    	SpinCAD/Intel HEX file
-     -in string
-    	Input wav-file (default "input.wav")
-     -out string
-    	Output wav-file (default "output.wav")
-     -p0 float
-    	Potentiometer 0 value (0 .. 1.0) (default 0.5)
-     -p1 float
-    	Potentiometer 1 value (0 .. 1.0) (default 0.5)
-     -p2 float
-    	Potentiometer 2 value (0 .. 1.0) (default 0.5)
-     -pmax
-    	Set all potentiometers to maximum
-     -pmin
-    	Set all potentiometers to minimum
-     -print-code
-    	Print program code (default true)
-     -print-debug
-    	Print additional info when debugging
-     -skip-to int
-    	Skip to sample number (when debugging) (default -1)
-     -stream
-    	Stream output to sound device
-     -trail float
-    	Additional trail length (seconds)
+    $ ./fv1emu -help
 
+    -bin string
+    	FV-1 binary file
+    -debug
+    	Enable step-debugger user-interface
+    -disable-24bits-clamping
+    	Disable clamping of register values to 24-bits but use the entire 32-bits range.
+    -hex string
+    	SpinCAD/Intel HEX file
+    -in string
+    	Input wav-file (default "input.wav")
+    -out string
+    	Output wav-file (default "output.wav")
+    -p0 float
+    	Potentiometer 0 value (0 .. 1.0) (default 0.5)
+    -p1 float
+    	Potentiometer 1 value (0 .. 1.0) (default 0.5)
+    -p2 float
+    	Potentiometer 2 value (0 .. 1.0) (default 0.5)
+    -pmax
+    	Set all potentiometers to maximum
+    -pmin
+    	Set all potentiometers to minimum
+    -print-code
+    	Print program code (default true)
+    -print-debug
+    	Print additional info when debugging
+    -reg-to-csv int
+    	Write register values to 'reg-<NUM>.csv'. One value per sample. (default -1)
+    -skip-to int
+    	Skip to sample number (when debugging) (default -1)
+    -stream
+    	Stream output to sound device
+    -trail float
+    	Additional trail length (seconds)
 
     $ ./fv1emu --in INPUT.WAV --out OUTPUT.WAV --bin ALGO.BIN 
 
