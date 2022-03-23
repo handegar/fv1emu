@@ -95,15 +95,7 @@ func PotentiometersInUse(ops []base.Op) (bool, bool, bool) {
 	pot2 := false
 
 	for _, op := range ops {
-		if op.Name == "RDAX" {
-			pot0 = op.Args[0].RawValue == base.POT0 || pot0
-			pot1 = op.Args[0].RawValue == base.POT1 || pot1
-			pot2 = op.Args[0].RawValue == base.POT2 || pot2
-		} else if op.Name == "MULX" {
-			pot0 = op.Args[0].RawValue == base.POT0 || pot0
-			pot1 = op.Args[0].RawValue == base.POT1 || pot1
-			pot2 = op.Args[0].RawValue == base.POT2 || pot2
-		} else if op.Name == "LDAX" && op.Args[0].RawValue == base.POT0 {
+		if op.Name == "RDAX" || op.Name == "MULX" || op.Name == "LDAX" {
 			pot0 = op.Args[0].RawValue == base.POT0 || pot0
 			pot1 = op.Args[0].RawValue == base.POT1 || pot1
 			pot2 = op.Args[0].RawValue == base.POT2 || pot2
@@ -134,12 +126,9 @@ func ADCsInUse(ops []base.Op) (bool, bool) {
 	adcl := false
 
 	for _, op := range ops {
-		if op.Name == "RDAX" {
-			adcr = op.Args[0].RawValue == base.DACR || adcr
-			adcl = op.Args[0].RawValue == base.DACL || adcl
-		} else if op.Name == "MULX" {
-			adcr = op.Args[0].RawValue == base.DACR || adcr
-			adcl = op.Args[0].RawValue == base.DACL || adcl
+		if op.Name == "RDAX" || op.Name == "LDAX" || op.Name == "MULX" {
+			adcr = op.Args[0].RawValue == base.ADCR || adcr
+			adcl = op.Args[0].RawValue == base.ADCL || adcl
 		}
 	}
 

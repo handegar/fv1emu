@@ -33,6 +33,8 @@ const (
 	DACL     = 0x16
 	DACR     = 0x17
 	ADDR_PTR = 0x18
+
+	REG0 = 0x20
 )
 
 const (

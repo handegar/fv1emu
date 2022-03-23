@@ -49,6 +49,10 @@ var SkipToSample = -1
 // be highlighted in the debugger.
 var Disable24BitsClamping = false
 
+// Write the result value for a register for each sample to a CSV file
+// Default filename will be 'reg-<NUM>.csv'. Ignored if value is < 0.
+var WriteRegisterToCSV = -1
+
 //
 // Debug stuff -- might disapear
 //

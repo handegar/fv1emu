@@ -206,10 +206,7 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
   Will "normalize" the LFO value to a number between [-1 .. 1]
 */
 func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
-	// Which value is correct?
-	// 1<<6: Handtuned "misc/tremolo-2.spn"
-	// 1<<8: Handtuned "misc/tremolo-1.spn"
-	sinFactor := float64((1 << 8) - 1)
+	sinFactor := float64((1 << 9) - 1)
 
 	// Which value is correct?
 	// 1<<11: Handtuned "calibrate/ramp-lfo.spn"

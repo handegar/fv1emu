@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
@@ -62,16 +63,6 @@ func parseCommandLineParameters() bool {
 	flag.BoolVar(&allPotsToMin, "pmin",
 		allPotsToMin, "Set all potentiometers to minimum")
 
-	if allPotsToMax {
-		settings.Pot0Value = 1.0
-		settings.Pot1Value = 1.0
-		settings.Pot2Value = 1.0
-	} else if allPotsToMin {
-		settings.Pot0Value = 0
-		settings.Pot1Value = 0
-		settings.Pot2Value = 0
-	}
-
 	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value,
 		"Potentiometer 0 value (0 .. 1.0)")
 	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value,
@@ -95,6 +86,10 @@ func parseCommandLineParameters() bool {
 	flag.IntVar(&settings.SkipToSample, "skip-to",
 		settings.SkipToSample,
 		"Skip to sample number (when debugging)")
+
+	flag.IntVar(&settings.WriteRegisterToCSV, "reg-to-csv",
+		settings.WriteRegisterToCSV,
+		"Write register values to 'reg-<NUM>.csv'. One value per sample.")
 
 	flag.BoolVar(&settings.Disable24BitsClamping, "disable-24bits-clamping",
 		settings.Disable24BitsClamping,
@@ -138,6 +133,16 @@ func parseCommandLineParameters() bool {
 	if settings.OutputWav == "" {
 		fmt.Println("  No output WAV file specified. Use the '-out' parameter.")
 		return false
+	}
+
+	if allPotsToMax {
+		settings.Pot0Value = 1.0
+		settings.Pot1Value = 1.0
+		settings.Pot2Value = 1.0
+	} else if allPotsToMin {
+		settings.Pot0Value = 0
+		settings.Pot1Value = 0
+		settings.Pot2Value = 0
 	}
 
 	return true
@@ -232,6 +237,25 @@ func main() {
 	printPotentiometersInUse(opCodes)
 	printDACsAndADCsInUse(opCodes)
 
+	var regCSVWriter *csv.Writer = nil
+	if settings.WriteRegisterToCSV >= 0 && !settings.Debugger {
+		filename := fmt.Sprintf("./reg-%d.csv", settings.WriteRegisterToCSV)
+		csvfile, err := os.Create(filename)
+		if err != nil {
+			fmt.Printf("Could not create '%s'", filename)
+			return
+		}
+		defer csvfile.Close()
+
+		color.Yellow("* All valued for REG%d will be written to '%s'\n",
+			settings.WriteRegisterToCSV, filename)
+
+		regCSVWriter = csv.NewWriter(csvfile)
+		regCSVWriter.Write([]string{fmt.Sprintf(";; fv1emu v%s |  Register%d dump",
+			settings.Version,
+			settings.WriteRegisterToCSV)})
+	}
+
 	f, stream, wavFormat, err := reader.ReadWAV(settings.InputWav)
 	defer f.Close()
 
@@ -287,6 +311,12 @@ func main() {
 			outSamples = append(outSamples, [2]float64{outLeft, outRight})
 			sampleNum += 1
 
+			if regCSVWriter != nil {
+				s := fmt.Sprintf("%f",
+					state.GetRegister(base.REG0+settings.WriteRegisterToCSV).ToFloat64())
+				regCSVWriter.Write([]string{s})
+			}
+
 			if !cont {
 				letsContinue = false
 				break
@@ -312,6 +342,12 @@ func main() {
 			for i := 0; i < numTrailSamples; i++ {
 				outLeft, outRight, ok := processSample(0.0, 0.0, state, opCodes, numSamples+i)
 				updateWavStatistics(numSamples+i, 0.0, 0.0, &statistics)
+
+				if regCSVWriter != nil {
+					s := fmt.Sprintf("%f",
+						state.GetRegister(base.REG0+settings.WriteRegisterToCSV).ToFloat64())
+					regCSVWriter.Write([]string{s})
+				}
 
 				if !ok {
 					break
@@ -426,12 +462,14 @@ func NoDebugFn(opCodes []base.Op, state *dsp.State, sampleNum int) int {
 func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []base.Op, sampleNum int) (float64, float64, bool) {
 	state.GetRegister(base.ADCL).SetFloat64(inLeft)
 	state.GetRegister(base.ADCR).SetFloat64(inRight)
+
 	cont := true
 	if settings.Debugger && dsp.GetSkipNumSamples() == 0 {
 		cont = dsp.ProcessSample(opCodes, state, sampleNum, DebugPreFn, DebugPostFn)
 	} else {
 		cont = dsp.ProcessSample(opCodes, state, sampleNum, NoDebugFn, NoDebugFn)
 	}
+
 	outLeft := state.GetRegister(base.DACL).ToFloat64()
 	outRight := state.GetRegister(base.DACR).ToFloat64()
 	return outLeft, outRight, cont

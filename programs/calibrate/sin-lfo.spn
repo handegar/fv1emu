@@ -28,7 +28,7 @@
 	; POT0 -> ACC
 start:
 	LDAX    POT0
-	; Write it to LFO0/1 amplitude register and clear ACC
+	;; Write it to LFO0/1 amplitude register and clear ACC
 	WRAX    SIN0_RANGE, 1.0
 	WRAX    SIN1_RANGE, 0
 	
@@ -37,18 +37,22 @@ start:
 	
 	SOF     1.0, 0.2446     ; Add 0.2446 to the value in the accumulator        
 
-	; Write it to the LFO0/1 frequency register and clear ACC
+	;; Write it to the LFO0/1 frequency register and clear ACC
 	WRAX    SIN0_RATE, 1.0
 	WRAX    SIN1_RATE, 0
 
 	
 	CHO     RDAL, SIN0      ; We now use the cho rdal instruction
 	                        ; which will read an LFO into the accumulator 
-	                        
+
+        WRAX    REG0, 1.0       ; Write to REG0, this can be dumped to CSV if needed    
+	
 	WRAX    DACL, 0         ; Wave is now in ACC, write it to DACL    
 	CHO     RDAL, SIN1
-		
-	WRAX    DACR, 0  ; Wave is now in ACC, write it to DACL
+
+
+        
+	WRAX    DACR, 0         ; Wave is now in ACC, write it to DACL
 
 ;;; That's it!
 
