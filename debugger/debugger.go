@@ -279,6 +279,10 @@ func overflowColored(v float64, min float64, max float64) string {
 	color := ""
 	if overflowed {
 		color = "fg:black,bg:red"
+	} else {
+		if v > 0.0 {
+			color = "bg:black"
+		}
 	}
 	return fmt.Sprintf("[%f](%s)", v, color)
 }
@@ -356,14 +360,14 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	regStr := ""
 	for i := 0x20; i <= 0x3f; i += 2 {
 		if showRegistersAsFloats {
-			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %s  ",
+			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %s  ",
 				i-0x20, overflowColored(state.Registers[i].ToFloat64(), -1.0, 1.0))
-			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %s\n",
+			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %s\n",
 				i-0x20+1, overflowColored(state.Registers[i+1].ToFloat64(), -1.0, 1.0))
 		} else {
-			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %d  ",
+			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %d  ",
 				i-0x20, state.Registers[i].ToInt32())
-			regStr += fmt.Sprintf("[Reg%2d:](fg:cyan) %d\n",
+			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %d\n",
 				i-0x20+1, state.Registers[i+1].ToInt32())
 		}
 	}
