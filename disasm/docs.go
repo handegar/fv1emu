@@ -120,10 +120,10 @@ var OpDocs = map[string]OpDoc{
 	},
 	"CHO SOF": {Short: "Chorus scale and offset",
 		Long: "Like the SOF instruction, CHO SOF will multiply ACC by a coefficient and add " +
-			"the constant D to the result. However, in contrast to SOF the coefficient is not " +
-			"explicitly embedded within the instruction. Instead, based on the selected LFO and " +
-			"the 6 bit vector C, the coefficient is picked from a list of possible coefficients " +
-			"available within the LFO block of the FV-1",
+			"the constant D to the result. ", /*However, in contrast to SOF the coefficient is not " +
+		"explicitly embedded within the instruction. Instead, based on the selected LFO and " +
+		"the 6 bit vector C, the coefficient is picked from a list of possible coefficients " +
+		"available within the LFO block of the FV-1"*/
 		Formulae: "See datasheet",
 	},
 	"CHO RDAL": {Short: "Write to LFO to ACC",

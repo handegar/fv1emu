@@ -31,15 +31,16 @@ start:
 	; Write it to the LFO0/1 frequency register and clear ACC
 	WRAX    RMP0_RATE, 1.0
 	WRAX    RMP1_RATE, 0
-	;
-	; We now use the cho rdal instruction which will read an LFO into the accumulator
+	
+	; We now use the CHO RDAL instruction which will read an LFO into the accumulator
 	CHO     RDAL, RMP0
-	;
+	
 	; Wave is now in ACC, write it to DACL
 	WRAX    DACL, 0
 
-	CHO     RDAL, RMP1
-	;
+        ; Read RAMP-1
+	CHO RDAL, RMP1
+	
 	; Wave is now in ACC, write it to DACL
 	WRAX   DACR, 0
 

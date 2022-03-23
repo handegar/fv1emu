@@ -118,7 +118,11 @@ The debugger also has a simple Delay Memory inspector.
 
 ## Notes
 
-- Converting UTF-16 .spn files to UTF-8:
+  - Converting UTF-16 .spn files to UTF-8:
  
         $ iconv -f UTF-16LE -t UTF-8 <infile> -o <outfile>
+        
+  - Plotting the content of a CSV register dump:
+    - Execute the following script available in this repo:
     
+        $ ./csv-plot.sh CSVFILE

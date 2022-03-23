@@ -2,6 +2,7 @@ package dsp
 
 import (
 	"github.com/handegar/fv1emu/base"
+	"github.com/handegar/fv1emu/settings"
 )
 
 func DecodeOp(opcode uint32) base.Op {
@@ -75,7 +76,7 @@ func DecodeOp(opcode uint32) base.Op {
 
 func DecodeOpCodes(buffer []uint32) []base.Op {
 	var ret []base.Op
-	for _, b := range buffer {
+	for n, b := range buffer {
 		op := DecodeOp(b)
 
 		if (op.Name == "SKP" || op.Name == "NOP") && op.Args[1].RawValue == 0 {
@@ -83,6 +84,9 @@ func DecodeOpCodes(buffer []uint32) []base.Op {
 		}
 
 		ret = append(ret, op)
+		if n > settings.InstructionsPerSample { // Fuse
+			break
+		}
 	}
 
 	return ret

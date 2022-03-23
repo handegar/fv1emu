@@ -27,9 +27,9 @@ func PrintCodeListing(opCodes []base.Op) {
 
 		fmt.Print(op + "\n")
 
-		if pos > settings.MaxNumberOfOps {
+		if pos > settings.InstructionsPerSample {
 			fmt.Printf(";; Max number of instructions reached (%d)\n",
-				settings.MaxNumberOfOps)
+				settings.InstructionsPerSample)
 			break
 		}
 	}

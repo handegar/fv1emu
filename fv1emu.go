@@ -83,6 +83,10 @@ func parseCommandLineParameters() bool {
 		settings.Debugger,
 		"Enable step-debugger user-interface")
 
+	flag.IntVar(&settings.ProgramNumber, "prog",
+		settings.ProgramNumber,
+		"Which program to load for multiprogram BIN/HEX files")
+
 	flag.IntVar(&settings.SkipToSample, "skip-to",
 		settings.SkipToSample,
 		"Skip to sample number (when debugging)")
@@ -110,10 +114,16 @@ func parseCommandLineParameters() bool {
 	//
 	flag.BoolVar(&settings.CHO_RDAL_is_NA, "cho-rdal-is-NA", settings.CHO_RDAL_is_NA,
 		"DEBUG: The 'CHO RDAL' op will output the NA crossfade envelope for RMP0")
+	flag.BoolVar(&settings.CHO_RDAL_is_NA_COMPC, "cho-rdal-is-NA-COMPC", settings.CHO_RDAL_is_NA_COMPC,
+		"DEBUG: The 'CHO RDAL' op will output the NA|COMPC crossfade envelope for RMP0")
 	flag.BoolVar(&settings.CHO_RDAL_is_RPTR2, "cho-rdal-is-RPTR2", settings.CHO_RDAL_is_RPTR2,
 		"DEBUG: The 'CHO RDAL' op will output the RPTR2 envelope for RMP0")
+	flag.BoolVar(&settings.CHO_RDAL_is_RPTR2_COMPC, "cho-rdal-is-RPTR2-COMPC", settings.CHO_RDAL_is_RPTR2_COMPC,
+		"DEBUG: The 'CHO RDAL' op will output the RPTR2|COMPC envelope for RMP0")
 	flag.BoolVar(&settings.CHO_RDAL_is_COMPA, "cho-rdal-is-COMPA", settings.CHO_RDAL_is_COMPA,
 		"DEBUG: The 'CHO RDAL' op will output the COMPA envelope for SIN0/RMP0")
+	flag.BoolVar(&settings.CHO_RDAL_is_COMPC, "cho-rdal-is-COMPC", settings.CHO_RDAL_is_COMPC,
+		"DEBUG: The 'CHO RDAL' op will output the COMPC envelope for SIN0/RMP0")
 	flag.BoolVar(&settings.CHO_RDAL_is_COS, "cho-rdal-is-COS", settings.CHO_RDAL_is_COS,
 		"DEBUG: The 'CHO RDAL' op will output the COS envelope for SIN0")
 
@@ -136,6 +146,11 @@ func parseCommandLineParameters() bool {
 
 	if settings.OutputWav == "" {
 		fmt.Println("  No output WAV file specified. Use the '-out' parameter.")
+		return false
+	}
+
+	if settings.ProgramNumber < 0 || settings.ProgramNumber > 7 {
+		fmt.Println("  Program number must be between 0 and 7.")
 		return false
 	}
 
@@ -226,11 +241,17 @@ func main() {
 		}
 	}
 
-	var opCodes = dsp.DecodeOpCodes(buf)
+	if len(buf) <= settings.ProgramNumber*settings.InstructionsPerSample {
+		fmt.Printf("Number of program(s) in BIN/HEX is only %d.\n",
+			len(buf)/settings.InstructionsPerSample)
+		return
+	}
+
+	var opCodes = dsp.DecodeOpCodes(buf[settings.ProgramNumber*settings.InstructionsPerSample:])
 	_ = opCodes
 
 	if len(opCodes) == 0 {
-		fmt.Println("No input instructions in BIN/HEX file...")
+		fmt.Println("No instructions in the BIN/HEX file...")
 		return
 	}
 

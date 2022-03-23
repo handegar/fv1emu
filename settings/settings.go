@@ -12,9 +12,6 @@ var Stream = false
 // Do a code printout
 var PrintCode = true
 
-// Max number of operations allowed in a FV-1 program
-var MaxNumberOfOps = 128
-
 // Potentiometer values
 var Pot0Value = 0.5
 var Pot1Value = 0.5
@@ -44,6 +41,9 @@ var SkipToSample = -1
 // Only process N-samples
 var StopAtSample = -1
 
+//
+var ProgramNumber = 0
+
 // The simulator uses 32bits fixed floats but the FV-1 uses 24bits
 // floats. We will therefore clamp all values to 24 bits. However one
 // might want to detect when a register or DAC reaches it's limits to
@@ -60,6 +60,9 @@ var WriteRegisterToCSV = -1
 // Debug stuff -- might disapear
 //
 var CHO_RDAL_is_NA = false
+var CHO_RDAL_is_NA_COMPC = false
 var CHO_RDAL_is_RPTR2 = false
+var CHO_RDAL_is_RPTR2_COMPC = false
 var CHO_RDAL_is_COMPA = false
+var CHO_RDAL_is_COMPC = false
 var CHO_RDAL_is_COS = false

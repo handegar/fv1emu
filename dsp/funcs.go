@@ -127,7 +127,8 @@ func updateRampLFO(state *State) {
 	// FIXME: What is the correct value here? (20220310 handegar)
 	// - 56.0: To get the "ramp-lfo.spn" to get 100Hz with POT1=0.0
 	// - 16385.0: Handtuning OEM1_6.bin (flanger) (half clockspeed?)
-	x := 16385.0
+	//x := 16385.0
+	x := 1000.0
 
 	state.Ramp0State.Value += (1.0 / rate0) / x
 	state.Ramp1State.Value += (1.0 / rate1) / x
@@ -145,7 +146,6 @@ func updateRampLFO(state *State) {
   Returns the LFO value, but 1/2 further into the cycle.
   NB: This is only valid for RAMP LFOs.
 */
-
 func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	if isSinLFO(lfoType) {
 		panic("Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
@@ -157,11 +157,11 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	lfo := 0.0
 
 	if lfoType == base.LFO_RMP0 {
-		state.Ramp0State.Value += 0.5
+		state.Ramp0State.Value += (0.5 / 2.0)
 		updateRampLFO(state)
 		lfo = state.Ramp0State.Value
 	} else {
-		state.Ramp1State.Value += 0.5
+		state.Ramp1State.Value += (0.5 / 2.0)
 		updateRampLFO(state)
 		lfo = state.Ramp1State.Value
 	}
@@ -180,12 +180,13 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	// FIXME: Get this right (20220311 handegar)
 	// 2.0: The tri-lfo.spn program.
-	// 32.0: misc/tremolo-1.spn & misc/chorus-2.spn
-	sinX := 32.0
+	// 32.0: misc/tremolo-1.spn (SpinCAD, virker rart)
+	// 2.0: vibrato-2.spn
+	sinX := 2.0
 
 	// FIXME: Get this right (20220311 handegar)
-	// Set to 1.0 as ramp-range only has 4 values anyways?
-	rmpX := 1.0
+	// 2.0: oem-1/OEM1_6.spn (flanger)
+	rmpX := 2.0
 
 	amp := 1.0
 	switch lfoType {
@@ -298,8 +299,20 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 }
 
 //
+// Expects a [min .. max] input. Returns a [0 .. 1.0] output.
+//
+func GetLFOComplement(lfo float64, min float64, max float64) float64 {
+	upShift := (0.0 - min) / 2.0
+	ret := (lfo / (max - min)) + upShift
+
+	utils.Assert(ret >= 0.0 && ret <= 1.0, "Complement value is < 0 || > 1.0")
+	return 1.0 - ret
+}
+
+//
 // This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
 // Outputs a [0 .. 1.0] range.
+//
 func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	if isSinLFO(typ) {
 		panic("Cannot crossfade a SIN LFO")
@@ -317,21 +330,22 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 		   We'll divide it into 5 phases: Start, rise, rest, sink, end
 	*/
 
-	phaseWidth := (1.0 / 5.0)
-	startPhase := phaseWidth
-	risePhase := (2 * phaseWidth)
-	restPhase := (3 * phaseWidth)
-	sinkPhase := (4 * phaseWidth)
+	phaseWidth := (1.0 / 5.0) / 2.0
+	startPhase := phaseWidth / 2.0
+	risePhase := startPhase + phaseWidth
+	restPhase := risePhase + phaseWidth
+	sinkPhase := restPhase + phaseWidth
 
+	x := 10.0
 	val := 0.0
 	if lfo > 0.0 && lfo < startPhase {
 		val = 0.0
 	} else if lfo > startPhase && lfo < risePhase {
-		val = (lfo - startPhase) * 5.0
+		val = (lfo - startPhase) * x
 	} else if lfo > risePhase && lfo < restPhase {
 		val = 1.0
 	} else if lfo > restPhase && lfo < sinkPhase {
-		val = 1.0 - (lfo-restPhase)*5.0
+		val = 1.0 - (lfo-restPhase)*x
 	} else { // End phase
 		val = 0.0
 	}
@@ -340,6 +354,7 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 		fmt.Printf("XFade: lfo=%f -> val=%f (%f, %f, %f, %f)\n",
 			lfo, val, startPhase, risePhase, restPhase, sinkPhase)
 	*/
+
 	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
 	state.DebugFlags.XFadeMin = math.Min(state.DebugFlags.XFadeMin, val)
 
