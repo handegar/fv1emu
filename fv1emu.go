@@ -87,6 +87,10 @@ func parseCommandLineParameters() bool {
 		settings.SkipToSample,
 		"Skip to sample number (when debugging)")
 
+	flag.IntVar(&settings.StopAtSample, "stop-at",
+		settings.StopAtSample,
+		"Stop at sample number")
+
 	flag.IntVar(&settings.WriteRegisterToCSV, "reg-to-csv",
 		settings.WriteRegisterToCSV,
 		"Write register values to 'reg-<NUM>.csv'. One value per sample.")
@@ -317,7 +321,7 @@ func main() {
 				regCSVWriter.Write([]string{s})
 			}
 
-			if !cont {
+			if !cont || (settings.StopAtSample > 0 && sampleNum >= settings.StopAtSample) {
 				letsContinue = false
 				break
 			}
@@ -335,7 +339,8 @@ func main() {
 		// Do trail-samples?
 		numSamples := len(outSamples)
 
-		if settings.TrailSeconds > 0.0 {
+		if settings.TrailSeconds > 0.0 &&
+			(settings.StopAtSample > 0 && sampleNum < settings.StopAtSample) {
 			numTrailSamples := int(settings.TrailSeconds * settings.SampleRate)
 			fmt.Printf("* Adding a %.2f second(s) trail (%d samples)\n",
 				settings.TrailSeconds, numTrailSamples)

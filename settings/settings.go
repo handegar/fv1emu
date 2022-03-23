@@ -41,6 +41,9 @@ var InstructionsPerSample = 128
 // Skip to sample @ startup
 var SkipToSample = -1
 
+// Only process N-samples
+var StopAtSample = -1
+
 // The simulator uses 32bits fixed floats but the FV-1 uses 24bits
 // floats. We will therefore clamp all values to 24 bits. However one
 // might want to detect when a register or DAC reaches it's limits to

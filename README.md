@@ -69,6 +69,8 @@ All dependencies are listed in "go.mod"
     	Write register values to 'reg-<NUM>.csv'. One value per sample. (default -1)
     -skip-to int
     	Skip to sample number (when debugging) (default -1)
+    -stop-at int
+    	Stop at sample number (default -1)
     -stream
     	Stream output to sound device
     -trail float
