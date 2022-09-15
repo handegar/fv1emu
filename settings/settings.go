@@ -20,11 +20,12 @@ var Pot2Value = 0.5
 // Step debugger
 var Debugger = false
 
-// Current samplerate
+// Samplerate of the output result
 var SampleRate = 44100.0
 
-// Std. clock speed
-var ClockFrequency = 32768.0
+// Internal clock speed of the "chip". Usually 32768.0 but we'll match
+// the samplerate as this is more convenient.
+var ClockFrequency = 44100.0
 
 // Trail samples
 var TrailSeconds = 0.0
