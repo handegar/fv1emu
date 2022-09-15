@@ -23,6 +23,9 @@ assembler.
 The emulator has currently only been compiled and tested on
 Ubuntu/Linux.
 
+No optimizations has been done so this emulator is not yet ready
+for robust realtime processing, yet.
+
 
 ## Dependencies
 
@@ -65,6 +68,8 @@ All dependencies are listed in "go.mod"
     	Print program code (default true)
     -print-debug
     	Print additional info when debugging
+    -prog int
+    	Which program to load for multiprogram BIN/HEX files
     -reg-to-csv int
     	Write register values to 'reg-<NUM>.csv'. One value per sample. (default -1)
     -skip-to int
@@ -95,7 +100,7 @@ The debugger also has a simple Delay Memory inspector.
  - Calibrate the LFO with an actual FV-1 DSP.
  - Get the Ramp-LFO right.
  - Catch overflows within operations (the register.Clamp24Bit() function) and show warnings in 
-   the debugger
+   the debugger.
  - Test on MacOS and Windows.
  - Better streaming, preferably realtime streaming.
  - Realtime processing of an input-stream like another app or
@@ -107,13 +112,20 @@ The debugger also has a simple Delay Memory inspector.
    the default.
  - Add scripted change-patterns to the realtime clock (like the EQD
    Afterneath).
-
+ - The FV-1 has internal filters. These should be emulated.
+   - The AN-0001, page 5 mentions "high-pass filtering in the DAC" in
+     the Ramp LFO program.
+ - Better memory-visualization
+ - Keep track and visualize allocated memory chunks in addition to the
+   entire memory-map.
 
 ## Links
 
  - A test-suite for the FV-1: https://github.com/ndf-zz/fv1testing
 
  - A Python based FV-1 assembler: https://github.com/ndf-zz/asfv1
+
+ - A search on Github for SpinASM programs: https://github.com/search?q=extension%3Aspcd
 
 
 ## Notes
@@ -126,3 +138,9 @@ The debugger also has a simple Delay Memory inspector.
     - Execute the following script available in this repo:
     
         $ ./csv-plot.sh CSVFILE
+ 
+  - Converting a Intel HEX file to BIN:
+    
+        $ objcopy -I ihex original.hex -O binary newfile.bin
+        
+        
