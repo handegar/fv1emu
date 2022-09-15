@@ -45,7 +45,7 @@ func parseCommandLineParameters() bool {
 	flag.StringVar(&settings.InFilename, "bin",
 		settings.InFilename, "FV-1 binary file")
 	flag.StringVar(&settings.InFilename, "hex",
-		settings.InFilename, "SpinCAD/Intel HEX file")
+		settings.InFilename, "SpinCAD/Intel HEX file (alias for \"-bin\")")
 	flag.StringVar(&settings.InputWav, "in",
 		settings.InputWav, "Input wav-file")
 	flag.StringVar(&settings.OutputWav, "out",

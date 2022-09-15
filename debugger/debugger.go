@@ -329,16 +329,16 @@ func updateStateView(state *dsp.State, sampleNum int) {
 		state.Registers[base.SIN1_RATE].Value, state.Registers[base.SIN1_RATE].ToFloat64(),
 		dsp.GetLFOValue(1, state, false),
 		state.Registers[base.SIN1_RANGE].Value, state.Registers[base.SIN1_RANGE].ToFloat64())
-	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d (%f)  [\u03940:](fg:cyan) %f\n"+
+	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d (%f)  [Value:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f)\n"+
-		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d (%f)  [\u03941:](fg:cyan) %f\n"+
+		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d (%f)  [Value:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f)",
 		state.Registers[base.RAMP0_RATE].Value, state.Registers[base.RAMP0_RATE].ToFloat64(),
 		dsp.GetLFOValue(2, state, false),
-		state.Registers[base.RAMP0_RANGE].Value, state.Registers[base.RAMP0_RANGE].ToFloat64(),
+		base.RampAmpValues[state.Registers[base.RAMP0_RANGE].Value], state.Registers[base.RAMP0_RANGE].ToFloat64(),
 		state.Registers[base.RAMP1_RATE].Value, state.Registers[base.RAMP1_RATE].ToFloat64(),
 		dsp.GetLFOValue(3, state, false),
-		state.Registers[base.RAMP1_RANGE].Value, state.Registers[base.RAMP1_RANGE].ToFloat64())
+		base.RampAmpValues[state.Registers[base.RAMP1_RANGE].Value], state.Registers[base.RAMP1_RANGE].ToFloat64())
 
 	vPos := 0
 	stateP := widgets.NewParagraph()

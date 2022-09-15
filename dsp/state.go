@@ -260,8 +260,8 @@ func (s *State) Reset() {
 	s.ramp1LFOReg = NewRegister(0)
 	s.Sin0State.Angle = 0.0
 	s.Sin1State.Angle = 0.0
-	s.Ramp0State.Value = 0.0
-	s.Ramp1State.Value = 0.0
+	s.Ramp0State.Value = 0.5
+	s.Ramp1State.Value = 0.5
 
 	s.workRegA = NewRegister(0)
 	s.workRegB = NewRegister(0)
@@ -282,9 +282,9 @@ func (s *State) Reset() {
 		s.Registers[i] = NewRegister(0) // All registers are S.23 as default
 	}
 
-	s.GetRegister(base.POT0).SetFloat64(settings.Pot0Value) // POT0,       (16)  Pot 0 input register
-	s.GetRegister(base.POT1).SetFloat64(settings.Pot1Value) // POT1,       (17)  Pot 1 input register
-	s.GetRegister(base.POT2).SetFloat64(settings.Pot2Value) // POT2,       (18)  Pot 2 input register
+	s.GetRegister(base.POT0).SetClampedFloat64(settings.Pot0Value) // POT0,       (16)  Pot 0 input register
+	s.GetRegister(base.POT1).SetClampedFloat64(settings.Pot1Value) // POT1,       (17)  Pot 1 input register
+	s.GetRegister(base.POT2).SetClampedFloat64(settings.Pot2Value) // POT2,       (18)  Pot 2 input register
 
 	s.DebugFlags.Reset()
 }

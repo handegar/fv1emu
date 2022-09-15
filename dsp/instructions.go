@@ -216,7 +216,8 @@ var opTable = map[string]interface{}{
 		// Special handling for LFO registers and ADDR_PTR
 		accAsInt := state.ACC.ToInt32()
 		if regNo == base.RAMP0_RANGE || regNo == base.RAMP1_RANGE {
-			reg.SetInt32(accAsInt >> (24 - 11 - 1))
+			quantized := int32(4.0 * state.ACC.ToFloat64())
+			reg.SetInt32(quantized)
 		} else if regNo == base.SIN0_RANGE || regNo == base.SIN1_RANGE {
 			reg.SetInt32(accAsInt >> (24 - 15 - 1))
 		} else if regNo == base.RAMP0_RATE || regNo == base.RAMP1_RATE {
@@ -338,10 +339,10 @@ var opTable = map[string]interface{}{
 		freq := op.Args[2].RawValue
 		typ := op.Args[3].RawValue
 
-		_, valid := base.RampAmpValuesMap[amp]
+		ampIdx, valid := base.RampAmpValuesMap[amp]
 		if !valid {
 			state.DebugFlags.SetInvalidRampLFOFlag(typ)
-			amp = 4096
+			amp = 4
 			msg := fmt.Sprintf("Ramp amplitude value (%d) is not "+
 				"512, 1024, 2048 or 4096", amp)
 			return errors.New(msg)
@@ -358,10 +359,10 @@ var opTable = map[string]interface{}{
 
 		if typ == 0 { // RAMP0
 			state.GetRegister(base.RAMP0_RATE).SetInt32(freq)
-			state.GetRegister(base.RAMP0_RANGE).SetInt32(amp)
+			state.GetRegister(base.RAMP0_RANGE).SetInt32(ampIdx)
 		} else { // RAMP1
 			state.GetRegister(base.RAMP1_RATE).SetInt32(freq)
-			state.GetRegister(base.RAMP1_RANGE).SetInt32(amp)
+			state.GetRegister(base.RAMP1_RANGE).SetInt32(ampIdx)
 		}
 		return nil
 	},
@@ -530,64 +531,72 @@ var opTable = map[string]interface{}{
 	},
 	"CHO RDAL": func(op base.Op, state *State) error {
 		typ := int(op.Args[1].RawValue)
-		lfo := GetLFOValue(typ, state, true)
+		lfoValue := GetLFOValue(typ, state, true)
 
 		// NOTE: The debug-flags only apply to SIN0/RMP0, *not* SIN1/RMP1
 		if settings.CHO_RDAL_is_NA && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 			// Used when debugging the NA envelope
-			xfade := GetXFadeFromLFO(lfo, typ, state)
+			xfade := GetXFadeFromLFO(lfoValue, typ, state)
 			scaledXFade := ScaleLFOValue(xfade, typ, state)
 			normXFade := NormalizeLFOValue(scaledXFade, typ, state)
 			state.ACC.SetFloat64(normXFade)
+
 		} else if settings.CHO_RDAL_is_NA_COMPC && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 			// Used when debugging the NA envelope
-			xfade := GetXFadeFromLFO(lfo, typ, state)
+			xfade := GetXFadeFromLFO(lfoValue, typ, state)
 			xfade = GetLFOComplement(xfade, 0.0, 1.0)
 
 			scaledXFade := ScaleLFOValue(xfade, typ, state)
 			normXFade := NormalizeLFOValue(scaledXFade, typ, state)
 			state.ACC.SetFloat64(normXFade)
+
 		} else if settings.CHO_RDAL_is_RPTR2 && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 			// Used when debugging the RPTR2 envelope
 			lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, state)
-			utils.Assert(lfo != lfoPlusHalf, "Internal RPTR2 error!")
+			utils.Assert(lfoValue != lfoPlusHalf, "Internal RPTR2 error!")
 			scaledLFO := ScaleLFOValue(lfoPlusHalf, typ, state)
 			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
 			state.ACC.SetFloat64(normLFO)
+
 		} else if settings.CHO_RDAL_is_RPTR2_COMPC && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 			// Used when debugging the RPTR2 envelope
 			lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, state)
-			utils.Assert(lfo != lfoPlusHalf, "Internal RPTR2 error!")
+			utils.Assert(lfoValue != lfoPlusHalf, "Internal RPTR2 error!")
 			lfoPlusHalf = GetLFOComplement(lfoPlusHalf, 0.0, 0.5)
 
 			scaledLFO := ScaleLFOValue(lfoPlusHalf, typ, state)
 			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
 			state.ACC.SetFloat64(normLFO)
+
 		} else if settings.CHO_RDAL_is_COMPA && (typ == base.LFO_RMP0 || typ == base.LFO_SIN0) {
 			// Used when debugging the COMPA envelope
-			scaledLFO := -ScaleLFOValue(lfo, typ, state)
+			scaledLFO := -ScaleLFOValue(lfoValue, typ, state)
 			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
 			state.ACC.SetFloat64(normLFO)
+
 		} else if settings.CHO_RDAL_is_COMPC && (typ == base.LFO_SIN0 || typ == base.LFO_RMP0) {
 			// Used when debugging the COMPC envelope
 			if typ == base.LFO_SIN0 {
-				lfo = GetLFOComplement(lfo, -1.0, 1.0)
+				lfoValue = GetLFOComplement(lfoValue, -1.0, 1.0)
 			} else {
-				lfo = GetLFOComplement(lfo, 0.0, 0.5)
+				lfoValue = GetLFOComplement(lfoValue, 0.0, 0.5)
 			}
-			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			scaledLFO := ScaleLFOValue(lfoValue, typ, state)
 			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
 			state.ACC.SetFloat64(normLFO)
 
 		} else if settings.CHO_RDAL_is_COS && typ == base.LFO_SIN0 {
 			// Used when debugging the COS envelope
-			lfo = GetLFOValue(typ+4, state, false)
-			lfoScaled := ScaleLFOValue(lfo, typ+4, state)
+			lfoValue = GetLFOValue(typ+4, state, false)
+			lfoScaled := ScaleLFOValue(lfoValue, typ+4, state)
 			state.ACC.SetFloat64(lfoScaled)
+
 		} else {
-			scaledLFO := ScaleLFOValue(lfo, typ, state)
+			// Regular CHO RDAL
+			scaledLFO := ScaleLFOValue(lfoValue, typ, state)
 			normLFO := NormalizeLFOValue(scaledLFO, typ, state)
 			state.ACC.SetFloat64(normLFO)
+			//fmt.Println(normLFO)
 		}
 
 		return nil

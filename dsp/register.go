@@ -5,18 +5,21 @@ import (
 	"math"
 
 	"github.com/handegar/fv1emu/settings"
+	"github.com/handegar/fv1emu/utils"
 )
 
 /**
   This is a register object which can hold any Q-Format number as long
-  as it fits into the internal 32-bit S8.23 format (sig, 7bit integer,
-  24bit fraction).
+  as it fits into the internal 32-bit S8.23 format:
+
+    [ sign | 7bit integer | 24bit fraction ]
 
   The value is always considered as a potentially signed.
 */
 
 type Register struct {
-	Value int32 // FV-1 only uses 24 bits
+	Value int32 // FV-1 only uses 24 bits internally but we'll use 32bits
+
 	// This is the "public" Q-format, internally it's always S8.23
 	IntBits      int
 	FractionBits int
@@ -30,7 +33,9 @@ func NewRegister(value int32) *Register {
 	return r
 }
 
-// Create a new register with a specified Q-Format
+/**
+  Create a new register with a specified Q-Format
+*/
 func NewRegisterWithIntsAndFracs(value int32, intbits int, fractionbits int) *Register {
 	r := NewRegister(0)
 	r.SetWithIntsAndFracs(value, intbits, fractionbits)
@@ -58,7 +63,9 @@ func (r *Register) SetToMin24Bit() *Register {
 	return r
 }
 
-// Returns TRUE on second value if value were clamped
+/**
+  Returns TRUE on second value if value were clamped
+*/
 func (r *Register) Clamp24Bit() (*Register, bool) {
 	if settings.Disable24BitsClamping { // Shall we not perform clamping?
 		return r, false
@@ -84,7 +91,9 @@ func (r *Register) extendSign() {
 	r.Value = r.Value >> (8 - r.IntBits)
 }
 
-// Set a different Q-Format value than S8.23
+/**
+  Set a different Q-Format value than S8.23
+*/
 func (r *Register) SetWithIntsAndFracs(value int32, intbits int, fractionbits int) *Register {
 	// Will the actual number fit?
 	if value > ((1 << (intbits + fractionbits + 1)) - 1) {
@@ -99,7 +108,21 @@ func (r *Register) SetWithIntsAndFracs(value int32, intbits int, fractionbits in
 	return r
 }
 
+func (r *Register) SetClampedFloat64(value float64) *Register {
+	if value >= 1.0 {
+		value = 0.99999
+	}
+	if value < -1.0 {
+		value = -1.0
+	}
+
+	r.SetFloat64(value)
+	return r
+}
+
 func (r *Register) SetFloat64(value float64) *Register {
+	utils.Assert(value < 1.0 && value >= -1.0,
+		fmt.Sprintf("Register.SetFloat64(%f): Value out of range [-1.0 .. 0.9999]", value))
 	r.Value = int32(value * math.Pow(2, 23))
 	r.IntBits = 8
 	r.FractionBits = 23
@@ -188,9 +211,9 @@ func (r *Register) IsSigned() bool {
 	return r.Value < 0
 }
 
-/*
-   bitsFraction specifies the required precision for the compare.
-   E.g: bitsFraction=3 -> epsilon=1/(2^3) (or 2^3 as an integer-value)
+/**
+  'lowestBitsFraction' specifies the required precision for the compare.
+  E.g: lowestBitsFraction=3 -> epsilon=1/(2^3) (or 2^3 as an integer-value)
 */
 func (r *Register) EqualWithEpsilon(reg *Register, lowestBitsFraction int) bool {
 	a := r.Value >> (23 - (lowestBitsFraction - 1))
@@ -198,14 +221,14 @@ func (r *Register) EqualWithEpsilon(reg *Register, lowestBitsFraction int) bool 
 
 	if a > b {
 		return a-b <= 1
-	} else {
-		return b-a <= 1
 	}
+
+	return b-a <= 1
 }
 
-/*
-   Performs a compare with a precision matched to the least precise
-   register.
+/**
+  Performs a compare with a precision matched to the least precise
+  register.
 */
 func (r *Register) Equal(reg *Register) bool {
 	a := r.Value
@@ -218,6 +241,7 @@ func (r *Register) Equal(reg *Register) bool {
 	if diff < 0 {
 		diff = -diff
 	}
+
 	diff = diff - 1 // To eliminate rounding errors
 	return diff < (1 << (23 - leastFractionBits))
 }
@@ -230,6 +254,10 @@ func (r *Register) LessThan(reg *Register) bool {
 	return r.Value < reg.Value
 }
 
+/**
+Print a nicely formatted binary representation of the register to
+STDOUT.
+*/
 func (r *Register) DebugPrint() {
 	fmt.Printf("\n")
 	fmt.Printf("        |MSB     24      16      8    LSB| S%d.%d\n", r.IntBits, r.FractionBits)

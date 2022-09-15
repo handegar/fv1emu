@@ -34,7 +34,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 	debugPre DebugCallback, debugPost DebugCallback) bool {
 	state.IP = 0
 
+	cycles := 0
+
 	for state.IP < uint(len(opCodes)) {
+		cycles += 1
 		// FIXME: The LFO should probably be updated in sync
 		// with an external clock, not per
 		// instruction. (20220227 handegar)
@@ -72,6 +75,7 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 	}
 
 	state.RUN_FLAG = true
+
 	// FIXME: Should we clear ACC? (20220222 handegar)
 	//state.ACC.Clear()
 
@@ -90,55 +94,79 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 	// update the LFOs for remaining cycles to ensure that we stay
 	// close to how the FV-1 operates (and sounds).
 	//
-	remainingCycles := settings.InstructionsPerSample - len(opCodes)
-	for i := 0; i < remainingCycles; i++ {
+	for cycles < settings.InstructionsPerSample {
 		updateSinLFO(state)
 		updateRampLFO(state)
+		cycles += 1
 	}
 
 	return true // Lets continue!
 }
 
 func updateSinLFO(state *State) {
-	// Sin LFO range is from 0.5Hz to 20Hz
-	sin0Freq := 0.5 + (state.Registers[base.SIN0_RATE].ToFloat64() * (20 - 0.5))
-	sin1Freq := 0.5 + (state.Registers[base.SIN1_RATE].ToFloat64() * (20 - 0.5))
 
-	// FIXME: What is the correct value here? (20220310 handegar)
-	// 168.0: Tuned "sin-lfo.spn" to 100Hz for POT1=0.0
-	// 8.0: Tuned "misc/tremolo-1.spn" to get a credible max/min-rate
-	x := 8.0
+	//
+	// Frequency formula (from the datasheet):
+	//   f = (RATE*CLOCKFREQ)/(2*PI*(2^17)
+	// Allowed values for RATE is 1..512 => 0..20Hz
+	//
+
+	// Sin LFO range is from 0.5Hz to 20Hz
+	f0 := (state.Registers[base.SIN0_RATE].ToFloat64() * settings.ClockFrequency) / (2.0 * math.Pi * (2 << 17))
+	f1 := (state.Registers[base.SIN1_RATE].ToFloat64() * settings.ClockFrequency) / (2.0 * math.Pi * (2 << 17))
+
+	utils.Assert(f0 >= 0.0 && f0 <= 128.0,
+		fmt.Sprintf("Sin0 rate out of range [0..20hz]: %f", f0))
+	utils.Assert(f1 >= 0.0 && f1 <= 128.0,
+		fmt.Sprintf("Sin1 rate out of range [0..20hz]: %f", f1))
 
 	// Update Sine-LFOs
-	sin0delta := ((2 * math.Pi * (sin0Freq - 0.5)) / settings.SampleRate) * x
+	sin0delta := f0 / float64(settings.InstructionsPerSample)
 	state.Sin0State.Angle += sin0delta
 
-	sin1delta := ((2 * math.Pi * (sin1Freq - 0.5)) / settings.SampleRate) * x
+	sin1delta := f1 / float64(settings.InstructionsPerSample)
 	state.Sin1State.Angle += sin1delta
 }
 
-//
-// This generates a sawtooth of [0 .. 0.5].
-//
+/**
+  This generates a sawtooth of [0 .. 0.5].
+*/
 func updateRampLFO(state *State) {
-	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32() + 1)
-	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32() + 1)
+	//
+	// Frequency formula (from the datasheet):
+	//   f=RATE/512
+	// Allowed values for RATE (16bit) is 0..65565 -> 0..128 hz
+	//
 
-	// FIXME: What is the correct value here? (20220310 handegar)
-	// - 56.0: To get the "ramp-lfo.spn" to get 100Hz with POT1=0.0
-	// - 16385.0: Handtuning OEM1_6.bin (flanger) (half clockspeed?)
-	//x := 16385.0
-	x := 1000.0
+	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32())
+	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32())
 
-	state.Ramp0State.Value += (1.0 / rate0) / x
-	state.Ramp1State.Value += (1.0 / rate1) / x
+	utils.Assert(rate0 >= 0.0 && rate0 <= 128.0*512,
+		fmt.Sprintf("Ramp0 rate out of range [0..128hz]: %f", rate0/512))
+	utils.Assert(rate1 >= 0.0 && rate1 <= 128.0*512,
+		fmt.Sprintf("Ramp1 rate out of range [0..128hz]: %f", rate1/512))
 
-	for state.Ramp0State.Value > 0.5 {
-		state.Ramp0State.Value -= 0.5
+	range0 := base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()]
+	range1 := base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()]
+
+	if range0 > 0.0 {
+		delta0 := (rate0 / float64(range0)) / settings.ClockFrequency
+		delta0 = delta0 / float64(settings.InstructionsPerSample)
+		state.Ramp0State.Value -= delta0
 	}
 
-	for state.Ramp1State.Value > 0.5 {
-		state.Ramp1State.Value -= 0.5
+	if range1 > 0.0 {
+		delta1 := (rate1 / float64(range1)) / settings.ClockFrequency
+		delta1 = delta1 / float64(settings.InstructionsPerSample)
+		state.Ramp1State.Value -= delta1
+	}
+
+	// New cycle?
+	for state.Ramp0State.Value < 0 {
+		state.Ramp0State.Value = 0.5
+	}
+	for state.Ramp1State.Value < 0 {
+		state.Ramp1State.Value = 0.5
 	}
 }
 
@@ -184,10 +212,6 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	// 2.0: vibrato-2.spn
 	sinX := 2.0
 
-	// FIXME: Get this right (20220311 handegar)
-	// 2.0: oem-1/OEM1_6.spn (flanger)
-	rmpX := 2.0
-
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
@@ -195,35 +219,41 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	case base.LFO_SIN1, base.LFO_COS1:
 		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) / sinX
 	case base.LFO_RMP0:
-		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32()) / rmpX
+		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP0_RANGE).ToInt32()]) / 4096.0
 	case base.LFO_RMP1:
-		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32()) / rmpX
+		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP1_RANGE).ToInt32()]) / 4096.0
 	}
 
-	return value * amp
+	result := value * amp
+
+	utils.Assert(result < 1.0 && result >= -1.0,
+		fmt.Sprintf("ScaleLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
+			value, lfoType, result))
+
+	return result
 }
 
 /**
-  Will "normalize" the LFO value to a number between [-1 .. 1]
+  Will "normalize" the LFO value to a number between [-1.0 .. 0.999]
 */
 func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
-	sinFactor := float64((1 << 9) - 1)
-
-	// Which value is correct?
-	// 1<<11: Handtuned "calibrate/ramp-lfo.spn"
-	rampFactor := float64((1 << 11) - 1)
+	sinFactor := 1.0 / float64((1<<9)-1)
 
 	ret := 0.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		ret = value / sinFactor
+		ret = value * sinFactor
 	case base.LFO_SIN1, base.LFO_COS1:
-		ret = value / sinFactor
+		ret = value * sinFactor
 	case base.LFO_RMP0:
-		ret = value / rampFactor
+		ret = value
 	case base.LFO_RMP1:
-		ret = value / rampFactor
+		ret = value
 	}
+
+	utils.Assert(ret < 1.0 && ret >= -1.0,
+		fmt.Sprintf("NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
+			value, lfoType, ret))
 
 	return ret
 }
@@ -250,28 +280,39 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 		}
 	}
 
+	//
+	// A possible optimization could be to roll our own SIN/COS
+	// function like this:
+	//   https://news.ycombinator.com/item?id=30844872
+	//
+	// The hardware sine-function in the FV-1 is not 64-bit as
+	// GOLang's "math.sin()" so there is no need for this kind of
+	// super-precision. A simple 24-bit will be more than enough
+	// and probably too precise for anyone to notice.
+	//
+
 	switch lfoType {
-	case base.LFO_SIN0:
+	case base.LFO_SIN0: // Sine
 		lfo = math.Sin(state.Sin0State.Angle)
 		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_SIN1:
 		lfo = math.Sin(state.Sin1State.Angle)
 		state.sin1LFOReg.SetFloat64(lfo)
-	case base.LFO_COS0:
+
+	case base.LFO_COS0: // Cosine
 		lfo = math.Cos(state.Sin0State.Angle)
 		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_COS1:
 		lfo = math.Cos(state.Sin1State.Angle)
 		state.sin1LFOReg.SetFloat64(lfo)
-	case base.LFO_RMP0:
+
+	case base.LFO_RMP0: // Ramps
 		lfo = state.Ramp0State.Value
-		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo,
-			"LFO Ramp0 range outside [0 .. 0.5]")
+		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo, "LFO Ramp0 range outside [0 .. 0.5]")
 		state.ramp0LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP1:
 		lfo = state.Ramp1State.Value
-		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo,
-			"LFO Ramp1 range outside [0 .. 0.5]")
+		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo, "LFO Ramp1 range outside [0 .. 0.5]")
 		state.ramp1LFOReg.SetFloat64(lfo)
 
 	default:
@@ -286,6 +327,7 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	} else if lfoType == base.LFO_SIN1 {
 		state.DebugFlags.Sin1Max = math.Max(state.DebugFlags.Sin1Max, lfo)
 		state.DebugFlags.Sin1Min = math.Min(state.DebugFlags.Sin1Min, lfo)
+
 	} else if lfoType == base.LFO_SIN1 {
 		state.DebugFlags.Ramp0Max = math.Max(state.DebugFlags.Ramp0Max, lfo)
 		state.DebugFlags.Ramp0Min = math.Min(state.DebugFlags.Ramp0Min, lfo)
