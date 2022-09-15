@@ -11,3 +11,6 @@ start:
 
 	cho     rdal, sin0      ;Read LFO SIN0
 	wrax    dacl, 0         ;Write to DACL. 
+
+ 	cho	    rdal, SIN0
+	wrax	  dacr, 0

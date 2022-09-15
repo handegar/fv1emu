@@ -10,6 +10,10 @@
 start:  
 	rdax	POT0, 0.1
 	wrax	SIN0_RATE, 0
-	cho	rdal, SIN0
-	wrax	dacl, 0
+
+ 	cho     rdal, SIN0
+	wrax    DACL, 0
+
+	cho     rdal,SIN0
+	wrax    DACR,0
  

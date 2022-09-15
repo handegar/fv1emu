@@ -38,11 +38,11 @@ start:
 	; Wave is now in ACC, write it to DACL
 	WRAX    DACL, 0
 
-        ; Read RAMP-1
-	CHO RDAL, RMP1
+  ; Read RAMP-1  
+	;; CHO     RDAL, RMP1
 	
 	; Wave is now in ACC, write it to DACL
-	WRAX   DACR, 0
+	WRAX    DACR, 0
 
 
 	; That's it!

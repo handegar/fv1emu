@@ -44,14 +44,11 @@ start:
 	
 	CHO     RDAL, SIN0      ; We now use the cho rdal instruction
 	                        ; which will read an LFO into the accumulator 
-
-        WRAX    REG0, 1.0       ; Write to REG0, this can be dumped to CSV if needed    
+  ;; WRAX    REG0, 1.0       ; Write to REG0, this can be dumped to CSV if needed    
 	
 	WRAX    DACL, 0         ; Wave is now in ACC, write it to DACL    
-	CHO     RDAL, SIN1
 
-
-        
+	CHO     RDAL, SIN1        
 	WRAX    DACR, 0         ; Wave is now in ACC, write it to DACL
 
 ;;; That's it!
