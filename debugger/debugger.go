@@ -299,7 +299,7 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	}
 	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:yellow,mod:bold) %s (%d)\n"+
 		"[PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
-		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RF:](fg:yellow) %d\n",
+		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RUN:](fg:yellow) %d\n",
 		state.IP,
 		// FIXME: Is the ACC an S.23 or an S1.14? (20220305 handegar)
 		overflowColored(state.ACC.ToFloat64(), -2.0, 2.0), state.ACC.Value,
@@ -323,25 +323,25 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	// Sine LFOs
 	sin0hz := (float64(state.Registers[base.SIN0_RATE].Value) * settings.ClockFrequency) / (2 * math.Pi * (1 << 17))
 	sin1hz := (float64(state.Registers[base.SIN1_RATE].Value) * settings.ClockFrequency) / (2 * math.Pi * (1 << 17))
-	lfoStr := fmt.Sprintf("[SIN0](fg:yellow)  [Rate:](fg:cyan) %d (%f)  [\u03B10:](fg:cyan) %f\n"+
+	lfoStr := fmt.Sprintf("[SIN0](fg:yellow)  [Rate:](fg:cyan) %d [\u03B10:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
-		"[SIN1](fg:yellow)  [Rate:](fg:cyan) %d (%f)  [\u03B11:](fg:cyan) %f\n"+
+		"[SIN1](fg:yellow)  [Rate:](fg:cyan) %d [\u03B11:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n",
-		state.Registers[base.SIN0_RATE].Value, state.Registers[base.SIN0_RATE].ToFloat64(), dsp.GetLFOValue(0, state, false),
+		state.Registers[base.SIN0_RATE].Value, dsp.GetLFOValue(0, state, false),
 		state.Registers[base.SIN0_RANGE].Value, state.Registers[base.SIN0_RANGE].ToFloat64(), sin0hz,
-		state.Registers[base.SIN1_RATE].Value, state.Registers[base.SIN1_RATE].ToFloat64(), dsp.GetLFOValue(1, state, false),
+		state.Registers[base.SIN1_RATE].Value, dsp.GetLFOValue(1, state, false),
 		state.Registers[base.SIN1_RANGE].Value, state.Registers[base.SIN1_RANGE].ToFloat64(), sin1hz)
 
 	// Ramp LFOs
 	rmp0hz := float64(state.Registers[base.RAMP0_RATE].Value) / 512.0
 	rmp1hz := float64(state.Registers[base.RAMP1_RATE].Value) / 512.0
-	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d (%f)  [Value:](fg:cyan) %f\n"+
+	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d [\u03940:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
-		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d (%f)  [Value:](fg:cyan) %f\n"+
+		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d [\u03941:](fg:cyan) %f\n"+
 		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f",
-		state.Registers[base.RAMP0_RATE].Value, state.Registers[base.RAMP0_RATE].ToFloat64(), dsp.GetLFOValue(2, state, false),
+		state.Registers[base.RAMP0_RATE].Value, dsp.GetLFOValue(2, state, false),
 		base.RampAmpValues[state.Registers[base.RAMP0_RANGE].Value], state.Registers[base.RAMP0_RANGE].ToFloat64(), rmp0hz,
-		state.Registers[base.RAMP1_RATE].Value, state.Registers[base.RAMP1_RATE].ToFloat64(), dsp.GetLFOValue(3, state, false),
+		state.Registers[base.RAMP1_RATE].Value, dsp.GetLFOValue(3, state, false),
 		base.RampAmpValues[state.Registers[base.RAMP1_RANGE].Value], state.Registers[base.RAMP1_RANGE].ToFloat64(), rmp1hz)
 
 	vPos := 0
