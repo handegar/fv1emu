@@ -409,7 +409,7 @@ var opTable = map[string]interface{}{
 			lfo = lfoRange - lfo
 		}
 
-		if (flags & base.CHO_NA) != 0 { // Shall we do the X-FADE?
+		if (flags & base.CHO_NA) != 0 { // == Shall we do the X-FADE? =====
 			if isSinLFO(typ) {
 				return errors.New("Cannot use the NA flag with SIN LFOs")
 			}
@@ -434,7 +434,7 @@ var opTable = map[string]interface{}{
 
 			state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
 			state.ACC.Add(state.workRegA.Mult(state.workRegB))
-		} else {
+		} else { // == Regular LFO envelope ================================
 			scaledLFO := ScaleLFOValue(lfo, typ, state)
 			delayIndex := addr + int(scaledLFO)
 

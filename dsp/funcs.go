@@ -113,10 +113,8 @@ func updateSinLFO(state *State) {
 	f1 := float64(state.Registers[base.SIN1_RATE].ToInt32()) //* settings.ClockFrequency
 	f1 = f1 / (2.0 * math.Pi * (2 << 11))
 
-	utils.Assert(f0 >= 0.0 && f0 <= 20.0,
-		fmt.Sprintf("Sin0 rate out of range [0..20hz]: %f", f0))
-	utils.Assert(f1 >= 0.0 && f1 <= 20.0,
-		fmt.Sprintf("Sin1 rate out of range [0..20hz]: %f", f1))
+	utils.Assert(f0 >= 0.0 && f0 <= 20.0, "Sin0 rate out of range [0..20hz]: %f", f0)
+	utils.Assert(f1 >= 0.0 && f1 <= 20.0, "Sin1 rate out of range [0..20hz]: %f", f1)
 
 	// This is a magic constant I have figured out by calibrating the
 	// emulated result against a real FV-1 chip. I assume this value is
@@ -145,9 +143,9 @@ func updateRampLFO(state *State) {
 	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32())
 
 	utils.Assert(rate0 >= 0.0 && rate0 <= 128.0*512,
-		fmt.Sprintf("Ramp0 rate out of range [0..128hz]: %f", rate0/512))
+		"Ramp0 rate out of range [0..128hz]: %f", rate0/512)
 	utils.Assert(rate1 >= 0.0 && rate1 <= 128.0*512,
-		fmt.Sprintf("Ramp1 rate out of range [0..128hz]: %f", rate1/512))
+		"Ramp1 rate out of range [0..128hz]: %f", rate1/512)
 
 	range0 := base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()]
 	range1 := base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()]
@@ -218,21 +216,21 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32() >> 7)
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32() >> 7)
 	case base.LFO_RMP0:
 		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP0_RANGE).ToInt32()])
 	case base.LFO_RMP1:
 		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP1_RANGE).ToInt32()])
 	}
 
-	result := value * (amp / 2.0)
+	result := value * amp
 
 	/*
 		utils.Assert(result < 1.0 && result >= -1.0,
-			fmt.Sprintf("ScaleLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
-				value, lfoType, result))
+			"ScaleLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
+				value, lfoType, result)
 	*/
 	return result
 }
@@ -257,8 +255,8 @@ func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
 	}
 
 	utils.Assert(ret < 1.0 && ret >= -1.0,
-		fmt.Sprintf("NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
-			value, lfoType, ret))
+		"NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
+		value, lfoType, ret)
 
 	return ret
 }
@@ -356,6 +354,8 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 // Expects a [min .. max] input. Returns a [0 .. 1.0] output.
 //
 func GetLFOComplement(lfo float64, min float64, max float64) float64 {
+	utils.Assert(lfo <= max && lfo >= min, "Complement value is out of bounds")
+
 	upShift := (0.0 - min) / 2.0
 	ret := (lfo / (max - min)) + upShift
 

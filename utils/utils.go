@@ -8,16 +8,17 @@ import (
 	"github.com/handegar/fv1emu/base"
 )
 
-func Assert(mustBeTrue bool, msg string) {
+func Assert(mustBeTrue bool, msg string, args ...interface{}) {
 	if !mustBeTrue {
-		fmt.Printf("ERROR: %s\n", msg)
+		fmt.Printf("ERROR: %s\n", fmt.Sprintf("%s", args...))
 		panic("ASSERT failed")
 	}
 }
 
-func AssertFloat64(mustBeTrue bool, val float64, msg string) {
+func AssertFloat64(mustBeTrue bool, val float64, msg string, args ...interface{}) {
 	if !mustBeTrue {
-		fmt.Printf("ERROR: %s.\n       Value was %f.\n", msg, val)
+		fmt.Printf("ERROR: %s.\n       Value was %f.\n",
+			fmt.Sprintf(msg, args...), val)
 		panic("ASSERT failed")
 	}
 }
