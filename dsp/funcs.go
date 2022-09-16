@@ -76,9 +76,6 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 
 	state.RUN_FLAG = true
 
-	// FIXME: Should we clear ACC? (20220222 handegar)
-	//state.ACC.Clear()
-
 	state.DelayRAMPtr -= 1
 	if state.DelayRAMPtr <= -32768 {
 		state.DelayRAMPtr = 0
@@ -104,7 +101,6 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 }
 
 func updateSinLFO(state *State) {
-
 	//
 	// Frequency formula (from the datasheet):
 	//   f = (RATE*CLOCKFREQ)/(2*PI*(2^17)
@@ -112,20 +108,27 @@ func updateSinLFO(state *State) {
 	//
 
 	// Sin LFO range is from 0.5Hz to 20Hz
-	f0 := (state.Registers[base.SIN0_RATE].ToFloat64() * settings.ClockFrequency) / (2.0 * math.Pi * (2 << 17))
-	f1 := (state.Registers[base.SIN1_RATE].ToFloat64() * settings.ClockFrequency) / (2.0 * math.Pi * (2 << 17))
+	f0 := float64(state.Registers[base.SIN0_RATE].ToInt32()) //* settings.ClockFrequency
+	f0 = f0 / (2.0 * math.Pi * (2 << 11))
+	f1 := float64(state.Registers[base.SIN1_RATE].ToInt32()) //* settings.ClockFrequency
+	f1 = f1 / (2.0 * math.Pi * (2 << 11))
 
-	utils.Assert(f0 >= 0.0 && f0 <= 128.0,
+	utils.Assert(f0 >= 0.0 && f0 <= 20.0,
 		fmt.Sprintf("Sin0 rate out of range [0..20hz]: %f", f0))
-	utils.Assert(f1 >= 0.0 && f1 <= 128.0,
+	utils.Assert(f1 >= 0.0 && f1 <= 20.0,
 		fmt.Sprintf("Sin1 rate out of range [0..20hz]: %f", f1))
+
+	// This is a magic constant I have figured out by calibrating the
+	// emulated result against a real FV-1 chip. I assume this value is
+	// due to some internal mechanism in the chip.
+	calibrationFactor := 1 / 4.0
 
 	// Update Sine-LFOs
 	sin0delta := f0 / float64(settings.InstructionsPerSample)
-	state.Sin0State.Angle += sin0delta
+	state.Sin0State.Angle += sin0delta * calibrationFactor
 
 	sin1delta := f1 / float64(settings.InstructionsPerSample)
-	state.Sin1State.Angle += sin1delta
+	state.Sin1State.Angle += sin1delta * calibrationFactor
 }
 
 /**
@@ -149,16 +152,21 @@ func updateRampLFO(state *State) {
 	range0 := base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()]
 	range1 := base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()]
 
+	// This is a magic constant I have figured out by calibrating the
+	// emulated result against a real FV-1 chip. I assume this value is
+	// due to some internal mechanism in the chip.
+	calibrationFactor := 8.0
+
 	if range0 > 0.0 {
 		delta0 := (rate0 / float64(range0)) / settings.ClockFrequency
 		delta0 = delta0 / float64(settings.InstructionsPerSample)
-		state.Ramp0State.Value -= delta0
+		state.Ramp0State.Value -= delta0 * calibrationFactor
 	}
 
 	if range1 > 0.0 {
 		delta1 := (rate1 / float64(range1)) / settings.ClockFrequency
 		delta1 = delta1 / float64(settings.InstructionsPerSample)
-		state.Ramp1State.Value -= delta1
+		state.Ramp1State.Value -= delta1 * calibrationFactor
 	}
 
 	// New cycle?
@@ -206,30 +214,26 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
   Return a LFO value scaled with the amplitude value specified in the state
 */
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
-	// FIXME: Get this right (20220311 handegar)
-	// 2.0: The tri-lfo.spn program.
-	// 32.0: misc/tremolo-1.spn (SpinCAD, virker rart)
-	// 2.0: vibrato-2.spn
-	sinX := 2.0
 
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32()) / sinX
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32()) / sinX
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
 	case base.LFO_RMP0:
-		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP0_RANGE).ToInt32()]) / 4096.0
+		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP0_RANGE).ToInt32()])
 	case base.LFO_RMP1:
-		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP1_RANGE).ToInt32()]) / 4096.0
+		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP1_RANGE).ToInt32()])
 	}
 
-	result := value * amp
+	result := value * (amp / 2.0)
 
-	utils.Assert(result < 1.0 && result >= -1.0,
-		fmt.Sprintf("ScaleLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
-			value, lfoType, result))
-
+	/*
+		utils.Assert(result < 1.0 && result >= -1.0,
+			fmt.Sprintf("ScaleLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
+				value, lfoType, result))
+	*/
 	return result
 }
 
@@ -237,7 +241,8 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
   Will "normalize" the LFO value to a number between [-1.0 .. 0.999]
 */
 func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
-	sinFactor := 1.0 / float64((1<<9)-1)
+	sinFactor := 1.0 / float64((1<<15)-1)
+	rmpFactor := 1.0 / float64((1<<12)-1)
 
 	ret := 0.0
 	switch lfoType {
@@ -246,9 +251,9 @@ func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
 	case base.LFO_SIN1, base.LFO_COS1:
 		ret = value * sinFactor
 	case base.LFO_RMP0:
-		ret = value
+		ret = value * rmpFactor
 	case base.LFO_RMP1:
-		ret = value
+		ret = value * rmpFactor
 	}
 
 	utils.Assert(ret < 1.0 && ret >= -1.0,
@@ -289,6 +294,13 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	// GOLang's "math.sin()" so there is no need for this kind of
 	// super-precision. A simple 24-bit will be more than enough
 	// and probably too precise for anyone to notice.
+	//
+
+	//
+	// NOTE: One thing I have seen while calibrating against a real FV-1
+	// is that the chip's sine function is quite uneven and more
+	// flattend on the bottom than the top. Maybe I should experiment with
+	// approximations to match the asymetric look on the real deal.
 	//
 
 	switch lfoType {

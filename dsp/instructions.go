@@ -224,12 +224,13 @@ var opTable = map[string]interface{}{
 			if accAsInt < 0 { // Don't allow a negative rate/freq
 				accAsInt = 0
 			}
+			// FIXME: Ramp rate is 16 bit. Shift 24-16? (20220915 handegar)
 			reg.SetInt32(accAsInt >> (24 - 14))
 		} else if regNo == base.SIN0_RATE || regNo == base.SIN1_RATE {
 			if accAsInt < 0 { // Don't allow a negative rate/freq
 				accAsInt = 0
 			}
-			reg.SetInt32(accAsInt >> (24 - 14))
+			reg.SetInt32(accAsInt >> (24 - 9))
 		} else if regNo == base.ADDR_PTR {
 			// This value will be down-scaled when used as
 			// we can only address 32768 memory bytes
