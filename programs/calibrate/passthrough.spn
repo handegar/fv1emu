@@ -1,0 +1,8 @@
+
+;;; Send left input to both outputs
+
+  CLR
+  RDAX    ADCL, 1.0             ; Read from LEFT input
+	WRAX    DACL, 1.0
+  WRAX    DACR, 1.0
+  

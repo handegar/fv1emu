@@ -1,0 +1,39 @@
+;;; From Application note AN-0001
+;;; Program AN0001-2.spn
+;;;
+;;; Pot0: Amplitude
+;;; Pot1: Rate/Frequency
+;;;
+;;;  => Left: Rmp0
+;;;  => Right: Rmp1
+;;;
+;;;  Pot1=0%   -> RAMP_RATE = 2000/512 = 3.9 hz
+;;;  Pot1=100% -> RAMP_RATE = 8000/512 = 15.6 hz
+;;;
+  
+	; Initialization, only run on first execution of code
+	; Skip to the START label if NOT the first time
+	SKP    RUN, start
+	; Initialize ramp LFO0/1 for 5Hz and +/- 0
+	WLDR   RMP0, 0, 4096
+start:
+	LDAX    POT0
+	;; Write it to LFO0/1 amplitude register and clear ACC
+	WRAX    RMP0_RANGE, 0.0
+
+	;; Read in POT1 and multiply it by 0.7338, POT1 * 0.7338 -> ACC
+	RDAX    POT1, 0.7338
+	;; Add 0.2446 to the value in the accumulator
+	SOF     1.0, 0.2446
+	;; Write it to the LFO0/1 frequency register and clear ACC
+	WRAX    RMP0_RATE, 0.0
+
+  RDAX    ADCL, 1.0             ; Read from LEFT input
+  WRAX    REG0, 0.0
+  
+	; We now use the CHO RDAL instruction which will read an LFO into the accumulator
+	CHO     RDAL, RMP0
+  MULX    REG0            ; Multiply ACC with REG0  	
+	WRAX    DACL, 0.0
+	WRAX    DACR, 0.0
+

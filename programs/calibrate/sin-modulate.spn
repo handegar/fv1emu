@@ -1,0 +1,44 @@
+;;; From Application note AN-0001
+;;; Program AN0001-2.spn
+;;;
+;;; Pot0: Amplitude
+;;; Pot1: Rate/Frequency
+;;;
+;;;  => Left: Sin0
+;;;  => Right: Sin1
+;;;
+;;;  Pot1=0%   -> SIN_RATE = (62*44100)/(2*PI*2^17)=  3.3 hz
+;;;  Pot1=100% -> SIN_RATE = (250*44100)/(2*PI*2^17)= 13.4 hz
+;;;  (With clockspeed of 44.1khz)
+;;;
+  
+;;; Initialization, only run on first execution of code
+;;; Skip to the START label if NOT the first time
+	SKP    RUN, start
+	WLDS   SIN0, 125, 0
+
+	; Main program code
+	; First, read in POT0 and write it to LFO0_RANGE
+	; POT0 -> ACC
+start:
+	LDAX    POT0
+	;; Write it to LFO0/1 amplitude register and clear ACC
+	WRAX    SIN0_RANGE, 0.0
+	
+	RDAX    POT1, 0.7338    ; Read in POT1 and multiply it by 0.7338
+                          ; POT1 * 0.7338 -> ACC 	
+	SOF     1.0, 0.2446     ; Add 0.2446 to the value in the accumulator        
+
+	;; Write it to the LFO0/1 frequency register and then clear ACC
+	WRAX    SIN0_RATE, 0.0
+
+  RDAX    ADCL, 1.0       ; Read from LEFT input
+  WRAX    REG0, 0.0       ; Write ACC to REG0 for later use
+  
+	CHO     RDAL, SIN0      ; We now use the CHO RDAL instruction
+	                        ; which will read an LFO into ACC 
+  MULX    REG0            ; Multiply ACC with REG0  	
+	WRAX    DACL, 0         ; Modulated wave is now in ACC, write it to DACL    
+   
+	WRAX    DACR, 0         ; Write silence to DACR
+
