@@ -219,12 +219,9 @@ var opTable = map[string]interface{}{
 		} else if regNo == base.SIN0_RANGE || regNo == base.SIN1_RANGE {
 			reg.SetInt32(accAsInt >> (24 - 15 - 1))
 		} else if regNo == base.RAMP0_RATE || regNo == base.RAMP1_RATE {
-			if accAsInt < 0 { // Don't allow a negative rate/freq
-				accAsInt = 0
-			}
-			// FIXME: Ramp rate is 16 bit. Shift 24-16? (20220915 handegar)
-			reg.SetInt32(accAsInt >> (24 - 14))
+			reg.SetInt32(int32(int16(accAsInt >> (24 - 16))))
 		} else if regNo == base.SIN0_RATE || regNo == base.SIN1_RATE {
+			// FIXME: Allow negative freqs for sine? (20220923 handegar)
 			if accAsInt < 0 { // Don't allow a negative rate/freq
 				accAsInt = 0
 			}
@@ -336,7 +333,7 @@ var opTable = map[string]interface{}{
 	"WLDR": func(op base.Op, state *State) error {
 		amp := base.RampAmpValues[op.Args[0].RawValue]
 
-		freq := int32(int16(op.Args[2].RawValue))
+		freq := int32(int16(op.Args[2].RawValue)) / 2
 		typ := op.Args[3].RawValue
 
 		ampIdx, valid := base.RampAmpValuesMap[amp]
@@ -348,11 +345,11 @@ var opTable = map[string]interface{}{
 			return errors.New(msg)
 		}
 
-		// cap frequency value
+		// Cap frequency value
 		if freq < -(1 << 14) { // -16384
 			freq = -(1 << 14) + 1
 			state.DebugFlags.SetInvalidRampLFOFlag(typ)
-		} else if freq > ((1 << 15) - 1) { // 32768
+		} else if freq > ((1 << 15) - 1) { // +32768
 			freq = (1 << 15) - 1
 			state.DebugFlags.SetInvalidRampLFOFlag(typ)
 		}

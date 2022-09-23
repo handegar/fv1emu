@@ -166,8 +166,8 @@ func updateRampLFO(state *State, num int) {
 		for state.Ramp0State.Value < 0 {
 			state.Ramp0State.Value = 0.5
 		}
-		for state.Ramp1State.Value > 0.5 {
-			state.Ramp1State.Value -= 0.5
+		for state.Ramp0State.Value > 0.5 {
+			state.Ramp0State.Value -= 0.5
 		}
 
 	} else {
@@ -323,10 +323,10 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 		state.sin1LFOReg.SetFloat64(lfo)
 
 	case base.LFO_COS0: // Cosine
-		lfo = math.Cos(state.Sin0State.Angle)
+		lfo = math.Cos(state.Sin0State.Angle) * 0.9999
 		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_COS1:
-		lfo = math.Cos(state.Sin1State.Angle)
+		lfo = math.Cos(state.Sin1State.Angle) * 0.9999
 		state.sin1LFOReg.SetFloat64(lfo)
 
 	case base.LFO_RMP0: // Ramps
@@ -451,7 +451,6 @@ func GetRampRange(typ int, state *State) float64 {
 	}
 
 	panic("Only RAMPx types allowed")
-	return 0.0
 }
 
 // Ensure the DelayRAM index is within bounds

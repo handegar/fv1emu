@@ -36,8 +36,7 @@ func CHO_RDA(op base.Op, state *State) error {
 	if (flags&base.CHO_COMPA) != 0 && isSinLFO(typ) {
 		lfo = -lfo
 	} else if (flags&base.CHO_COMPA) != 0 && !isSinLFO(typ) {
-		lfoRange := GetRampRange(typ, state) / 4096.0
-		lfo = lfoRange - lfo
+		lfo = (GetRampRange(typ, state) / 1.0) - lfo
 	}
 
 	if (flags & base.CHO_NA) != 0 { // === Shall we do the X-FADE? =====
@@ -78,10 +77,9 @@ func CHO_RDA(op base.Op, state *State) error {
 
 		if (flags & base.CHO_COMPC) != 0 {
 			// FIXME: Is this shift needed? (20220923 handegar)
-			/*
-				if isSinLFO(typ) {
-					lfo = (lfo + 1.0) / 2.0 // Shift to [0 .. 1.0]
-				}*/
+			if isSinLFO(typ) {
+				lfo = (lfo + 1.0) / 2.0 // Shift to [0 .. 1.0]
+			}
 			state.scaleReg.SetFloat64(0.9999 - lfo)
 		} else {
 			state.scaleReg.SetFloat64(lfo)
