@@ -257,7 +257,7 @@ func generateCodeListing(opCodes []base.Op, state *dsp.State, screenHeight int) 
 
 		for _, p := range skpTargets {
 			if p == ((lineNo + i) - 1) {
-				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo+i)
+				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo+i+1)
 				lines = append(lines, skpLine)
 				break
 			}
