@@ -41,8 +41,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 		// FIXME: The LFO should probably be updated in sync
 		// with an external clock, not per
 		// instruction. (20220227 handegar)
-		updateSinLFO(state)
-		updateRampLFO(state)
+		updateSinLFO(state, 0)
+		updateSinLFO(state, 1)
+		updateRampLFO(state, 0)
+		updateRampLFO(state, 1)
 
 		op := opCodes[state.IP]
 
@@ -92,119 +94,127 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 	// close to how the FV-1 operates (and sounds).
 	//
 	for cycles < settings.InstructionsPerSample {
-		updateSinLFO(state)
-		updateRampLFO(state)
+		updateSinLFO(state, 0)
+		updateSinLFO(state, 1)
+		updateRampLFO(state, 0)
+		updateRampLFO(state, 1)
 		cycles += 1
 	}
 
 	return true // Lets continue!
 }
 
-func updateSinLFO(state *State) {
+func updateSinLFO(state *State, num int) {
 	//
 	// Frequency formula (from the datasheet):
 	//   f = (RATE*CLOCKFREQ)/(2*PI*(2^17)
 	// Allowed values for RATE is 1..512 => 0..20Hz
 	//
 
-	// Sin LFO range is from 0.5Hz to 20Hz
-	f0 := float64(state.Registers[base.SIN0_RATE].ToInt32()) //* settings.ClockFrequency
-	f0 = f0 / (2.0 * math.Pi * (2 << 11))
-	f1 := float64(state.Registers[base.SIN1_RATE].ToInt32()) //* settings.ClockFrequency
-	f1 = f1 / (2.0 * math.Pi * (2 << 11))
-
-	utils.Assert(f0 >= 0.0 && f0 <= 20.0, "Sin0 rate out of range [0..20hz]: %f", f0)
-	utils.Assert(f1 >= 0.0 && f1 <= 20.0, "Sin1 rate out of range [0..20hz]: %f", f1)
-
 	// This is a magic constant I have figured out by calibrating the
 	// emulated result against a real FV-1 chip. I assume this value is
 	// due to some internal mechanism in the chip.
 	calibrationFactor := 1 / 4.0
 
-	// Update Sine-LFOs
-	sin0delta := f0 / float64(settings.InstructionsPerSample)
-	state.Sin0State.Angle += sin0delta * calibrationFactor
+	if num == 0 {
+		f0 := float64(state.Registers[base.SIN0_RATE].ToInt32()) //* settings.ClockFrequency
+		f0 = f0 / (2.0 * math.Pi * (2 << 11))
 
-	sin1delta := f1 / float64(settings.InstructionsPerSample)
-	state.Sin1State.Angle += sin1delta * calibrationFactor
+		utils.Assert(f0 >= 0.0 && f0 <= 20.0, "Sin0 rate out of range [0..20hz]: %f", f0)
+
+		sin0delta := f0 / float64(settings.InstructionsPerSample)
+		state.Sin0State.Angle += sin0delta * calibrationFactor
+	} else {
+		f1 := float64(state.Registers[base.SIN1_RATE].ToInt32()) //* settings.ClockFrequency
+		f1 = f1 / (2.0 * math.Pi * (2 << 11))
+
+		utils.Assert(f1 >= 0.0 && f1 <= 20.0, "Sin1 rate out of range [0..20hz]: %f", f1)
+
+		sin1delta := f1 / float64(settings.InstructionsPerSample)
+		state.Sin1State.Angle += sin1delta * calibrationFactor
+	}
 }
 
 /**
   This generates a sawtooth of [0 .. 0.5].
 */
-func updateRampLFO(state *State) {
+func updateRampLFO(state *State, num int) {
 	//
 	// Frequency formula (from the datasheet):
 	//   f=RATE/512
 	// Allowed values for RATE (16bit) is 0..65565 -> 0..128 hz
 	//
 
-	rate0 := float64(state.Registers[base.RAMP0_RATE].ToInt32())
-	rate1 := float64(state.Registers[base.RAMP1_RATE].ToInt32())
-
-	utils.Assert(rate0 >= 0.0 && rate0 <= 128.0*512,
-		"Ramp0 rate out of range [0..128hz]: %f", rate0/512)
-	utils.Assert(rate1 >= 0.0 && rate1 <= 128.0*512,
-		"Ramp1 rate out of range [0..128hz]: %f", rate1/512)
-
-	range0 := base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()]
-	range1 := base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()]
-
 	// This is a magic constant I have figured out by calibrating the
 	// emulated result against a real FV-1 chip. I assume this value is
 	// due to some internal mechanism in the chip.
 	calibrationFactor := 8.0
 
-	if range0 > 0.0 {
-		delta0 := (rate0 / float64(range0)) / settings.ClockFrequency
-		delta0 = delta0 / float64(settings.InstructionsPerSample)
-		state.Ramp0State.Value -= delta0 * calibrationFactor
+	if num == 0 {
+		range0 := base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()]
+
+		if range0 > 0.0 {
+			rate := state.Registers[base.RAMP0_RATE].ToInt32()
+			utils.Assert(rate >= -64*512 && rate <= 128*512,
+				"Ramp0 rate out of range [0..128hz]: %d", rate/512)
+			delta := (float64(rate) / float64(range0)) / settings.ClockFrequency
+			delta = delta / float64(settings.InstructionsPerSample)
+			state.Ramp0State.Value -= delta * calibrationFactor
+		}
+
+		// New cycle?
+		for state.Ramp0State.Value < 0 {
+			state.Ramp0State.Value = 0.5
+		}
+		for state.Ramp1State.Value > 0.5 {
+			state.Ramp1State.Value -= 0.5
+		}
+
+	} else {
+		range1 := base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()]
+		if range1 > 0.0 {
+			rate := state.Registers[base.RAMP1_RATE].ToInt32()
+			utils.Assert(rate >= -64*512 && rate <= 128*512,
+				"Ramp1 rate out of range1 [0..128hz]: %d", rate/512)
+
+			delta := (float64(rate) / float64(range1)) / settings.ClockFrequency
+			delta = delta / float64(settings.InstructionsPerSample)
+			state.Ramp1State.Value -= delta * calibrationFactor
+		}
+
+		// New cycle?
+		for state.Ramp1State.Value < 0 {
+			state.Ramp1State.Value += 0.5
+		}
+
+		for state.Ramp1State.Value > 0.5 {
+			state.Ramp1State.Value -= 0.5
+		}
+
 	}
 
-	if range1 > 0.0 {
-		delta1 := (rate1 / float64(range1)) / settings.ClockFrequency
-		delta1 = delta1 / float64(settings.InstructionsPerSample)
-		state.Ramp1State.Value -= delta1 * calibrationFactor
-	}
-
-	// New cycle?
-	for state.Ramp0State.Value < 0 {
-		state.Ramp0State.Value = 0.5
-	}
-	for state.Ramp1State.Value < 0 {
-		state.Ramp1State.Value = 0.5
-	}
 }
 
 /**
   Returns the LFO value, but 1/2 further into the cycle.
   NB: This is only valid for RAMP LFOs.
+
+  // FIXME: This func needs to be re-checked to see if it is
+  // correct. We should also get rid of the daft while/for loop by
+  // using some bitmask'ing on integers instead.
+  // (20220917 handegar)
 */
-func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
+func GetLFOValuePlusHalfCycle(lfoType int, lfoValue float64) float64 {
 	if isSinLFO(lfoType) {
 		panic("Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
 	}
 
-	// Save the original RAMP state
-	rmp0value := state.Ramp0State.Value
-	rmp1value := state.Ramp1State.Value
-	lfo := 0.0
-
-	if lfoType == base.LFO_RMP0 {
-		state.Ramp0State.Value += (0.5 / 2.0)
-		updateRampLFO(state)
-		lfo = state.Ramp0State.Value
-	} else {
-		state.Ramp1State.Value += (0.5 / 2.0)
-		updateRampLFO(state)
-		lfo = state.Ramp1State.Value
+	lfo := lfoValue - 0.5
+	for lfo < 0 {
+		lfo += 0.5
 	}
 
-	// Restore the state
-	state.Ramp0State.Value = rmp0value
-	state.Ramp1State.Value = rmp1value
-
-	utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO range outside [0 .. 0.5]")
+	utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO range outside [0 .. 0.5] (was %f)", lfo)
 	return lfo
 }
 
@@ -216,9 +226,9 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32() >> 7)
+		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32() >> 7)
+		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
 	case base.LFO_RMP0:
 		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP0_RANGE).ToInt32()])
 	case base.LFO_RMP1:
@@ -264,6 +274,9 @@ func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
 /**
   Return the normalized LFO value
   ie. a value from  <-1.0 .. 1.0>
+
+  Set the 'storeValue' parameter to TRUE when the "REG" keyword is
+  used for the "CHO RDA" instruction.
 */
 func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	lfo := 0.0
@@ -318,11 +331,11 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 
 	case base.LFO_RMP0: // Ramps
 		lfo = state.Ramp0State.Value
-		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo, "LFO Ramp0 range outside [0 .. 0.5]")
+		utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO Ramp0 range outside [0 .. 0.5] (was %f)", lfo)
 		state.ramp0LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP1:
 		lfo = state.Ramp1State.Value
-		utils.AssertFloat64(lfo <= 0.5 && lfo >= 0.0, lfo, "LFO Ramp1 range outside [0 .. 0.5]")
+		utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO Ramp1 range outside [0 .. 0.5] (was %f)", lfo)
 		state.ramp1LFOReg.SetFloat64(lfo)
 
 	default:
@@ -351,23 +364,10 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 }
 
 //
-// Expects a [min .. max] input. Returns a [0 .. 1.0] output.
-//
-func GetLFOComplement(lfo float64, min float64, max float64) float64 {
-	utils.Assert(lfo <= max && lfo >= min, "Complement value is out of bounds")
-
-	upShift := (0.0 - min) / 2.0
-	ret := (lfo / (max - min)) + upShift
-
-	utils.Assert(ret >= 0.0 && ret <= 1.0, "Complement value is < 0 || > 1.0")
-	return 1.0 - ret
-}
-
-//
 // This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
 // Outputs a [0 .. 1.0] range.
 //
-func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
+func GetXFadeFromLFO__OLD(lfo float64, typ int, state *State) float64 {
 	if isSinLFO(typ) {
 		panic("Cannot crossfade a SIN LFO")
 	}
@@ -376,12 +376,18 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 		   We want the ramp to look like this over the LFO
 	           period (0 .. 0.5):
 
-		                _______
-		               /       \
+		                  _______
+		                 /       \
 	  	          ____/         \____
 	           Phase   0   1   2   3   4
 
 		   We'll divide it into 5 phases: Start, rise, rest, sink, end
+	*/
+
+	/*
+	   UPDATE:
+	   It seems to me that the AN-0001 illustration of an xfade envelope is abit incorrect.
+
 	*/
 
 	phaseWidth := (1.0 / 5.0) / 2.0
@@ -397,21 +403,43 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	} else if lfo > startPhase && lfo < risePhase {
 		val = (lfo - startPhase) * x
 	} else if lfo > risePhase && lfo < restPhase {
-		val = 1.0
+		val = 0.9999
 	} else if lfo > restPhase && lfo < sinkPhase {
-		val = 1.0 - (lfo-restPhase)*x
+		val = 0.9999 - (lfo-restPhase)*x
 	} else { // End phase
 		val = 0.0
 	}
 
-	/*
-		fmt.Printf("XFade: lfo=%f -> val=%f (%f, %f, %f, %f)\n",
-			lfo, val, startPhase, risePhase, restPhase, sinkPhase)
-	*/
-
 	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
 	state.DebugFlags.XFadeMin = math.Min(state.DebugFlags.XFadeMin, val)
 
+	return val
+}
+
+//
+// This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
+// Outputs a [0 .. 0.5] ranged "pyramid".
+//
+func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
+	if isSinLFO(typ) {
+		panic("Cannot crossfade a SIN LFO")
+	}
+
+	amp := 0.0
+	if typ == 0 {
+		amp = float64(base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()])
+	} else {
+		amp = float64(base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()])
+	}
+
+	xfade := 0.25 - lfo
+	if lfo > 0.25 {
+		xfade = lfo - 0.25
+	}
+
+	val := (xfade * amp) / 4096.0
+
+	utils.Assert(val < 1.0 && val >= -1.0, "XFadeValue out of range (was %f)", val)
 	return val
 }
 

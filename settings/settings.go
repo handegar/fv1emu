@@ -20,6 +20,9 @@ var Pot2Value = 0.5
 // Step debugger
 var Debugger = false
 
+// Activate profiler
+var Profiler = false
+
 // Samplerate of the output result
 var SampleRate = 44100.0
 
@@ -67,3 +70,6 @@ var CHO_RDAL_is_RPTR2_COMPC = false
 var CHO_RDAL_is_COMPA = false
 var CHO_RDAL_is_COMPC = false
 var CHO_RDAL_is_COS = false
+
+// Output filename for the CPU profiler
+var ProfilerFilename = ""

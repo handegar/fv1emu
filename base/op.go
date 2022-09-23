@@ -57,7 +57,7 @@ var Ops = map[uint32]Op{
 		[]OpArg{{6, UInt, 0}, {5, Blank, 0}, {16, Real_1_14, 0}},
 		0},
 	0x12: {"WLDR", // WLDS and WLDR (last flag: 00->WLDS, 01->WLDR)
-		[]OpArg{{2, Flag, 0}, {6, Blank, 0}, {16, UInt, 0}, {1, Flag, 0}, {2, Const, 1}},
+		[]OpArg{{2, Flag, 0}, {6, Blank, 0}, {16, Int, 0}, {1, Flag, 0}, {2, Const, 1}},
 		// WLDS
 		//  []OpArg{{15, UInt, 0}, {9, UInt, 0}, {1, Flag, 0}, {2, Const, 0}},
 		0},
@@ -143,6 +143,10 @@ var ChoFlagSymbols = map[int]string{
 	CHO_COMPA: "COMPA",
 	CHO_RPTR2: "RPTR2",
 	CHO_NA:    "NA",
+}
+
+var LFOTypeNames = []string{
+	"SIN0", "SIN1", "RMP0", "RMP1", "COS0", "COS1",
 }
 
 var RampAmpValuesMap = map[int32]int32{

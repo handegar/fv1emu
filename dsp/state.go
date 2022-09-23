@@ -35,8 +35,10 @@ type State struct {
 
 	Registers RegisterBank
 
-	workRegA *Register // Register used interally for certain operations
-	workRegB *Register // Register used interally for certain operations
+	workRegA  *Register // Register used interally for certain operations
+	workRegB  *Register // Register used interally for certain operations
+	scaleReg  *Register // Register used interally for certain operations
+	offsetReg *Register // Register used interally for certain operations
 
 	workReg0_23 *Register // S.23
 	workReg0_10 *Register // S.10
@@ -265,6 +267,8 @@ func (s *State) Reset() {
 
 	s.workRegA = NewRegister(0)
 	s.workRegB = NewRegister(0)
+	s.scaleReg = NewRegister(0)
+	s.offsetReg = NewRegister(0)
 
 	s.workReg0_23 = NewRegisterWithIntsAndFracs(0, 0, 23)
 	s.workReg0_10 = NewRegisterWithIntsAndFracs(0, 0, 10)

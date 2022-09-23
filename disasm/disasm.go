@@ -273,7 +273,7 @@ func WLDS_ToString(op base.Op) string {
 
 func WLDR_ToString(op base.Op) string {
 	amp := int(base.RampAmpValues[op.Args[0].RawValue])
-	freq := int(op.Args[2].RawValue)
+	freq := int(int16(op.Args[2].RawValue))
 	typ := "RMP0"
 	if op.Args[3].RawValue == 1 {
 		typ = "RMP1"

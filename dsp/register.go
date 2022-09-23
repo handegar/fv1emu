@@ -122,7 +122,7 @@ func (r *Register) SetClampedFloat64(value float64) *Register {
 
 func (r *Register) SetFloat64(value float64) *Register {
 	utils.Assert(value < 1.0 && value >= -1.0,
-		fmt.Sprintf("Register.SetFloat64(%f): Value out of range [-1.0 .. 0.9999]", value))
+		"Register.SetFloat64(%f): Value out of range [-1.0 .. 0.9999]", value)
 	r.Value = int32(value * math.Pow(2, 23))
 	r.IntBits = 8
 	r.FractionBits = 23

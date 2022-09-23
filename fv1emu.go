@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -126,6 +127,8 @@ func parseCommandLineParameters() bool {
 		"DEBUG: The 'CHO RDAL' op will output the COMPC envelope for SIN0/RMP0")
 	flag.BoolVar(&settings.CHO_RDAL_is_COS, "cho-rdal-is-COS", settings.CHO_RDAL_is_COS,
 		"DEBUG: The 'CHO RDAL' op will output the COS envelope for SIN0")
+	flag.StringVar(&settings.ProfilerFilename, "profile", settings.ProfilerFilename,
+		"DEBUG: Activate the GOLang CPU profiler by specifying the output file")
 
 	flag.Parse()
 
@@ -316,6 +319,23 @@ func main() {
 	// Main processing loop
 	//
 
+	if settings.ProfilerFilename != "" {
+		f, err := os.Create(settings.ProfilerFilename)
+		if err != nil {
+			fmt.Printf("* ERROR: Could not create profile file: %s\n", err)
+			return
+		}
+		fmt.Printf("* Writing profile info to '%s'\n", settings.ProfilerFilename)
+		fmt.Printf("  - To analyze result: \"$ go tool pprof %s\"\n", settings.ProfilerFilename)
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			fmt.Printf("* ERROR: Could not start profiler: %s\n", err)
+			return
+		}
+		defer f.Close()
+		defer pprof.StopCPUProfile()
+	}
+
 	var outSamples [][2]float64
 	for {
 		var samples [][2]float64 = make([][2]float64, 1024)
@@ -353,6 +373,14 @@ func main() {
 		}
 	}
 
+	/*
+		if settings.Profiler {
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("Could not write memory profile: ", err)
+			}
+		}
+	*/
 	if settings.Debugger {
 		ui.Close()
 		color.Yellow("* No more samples to process.")
@@ -382,8 +410,10 @@ func main() {
 				outSamples = append(outSamples, [2]float64{outLeft, outRight})
 			}
 		}
-		duration := time.Since(start)
-		fmt.Printf("   -> ..took %s (%d samples)\n", duration, len(outSamples))
+		duration := time.Since(start).Seconds()
+		fmt.Printf("   -> ..took %fs to process %d samples (%.2f%% of realtime)\n",
+			duration, len(outSamples),
+			(float64(duration) / (float64(len(outSamples)) / settings.SampleRate) * 100.0))
 	}
 
 	statistics.Left.Mean = statistics.Left.Mean / float64(statistics.NumSamples)

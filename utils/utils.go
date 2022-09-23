@@ -8,17 +8,12 @@ import (
 	"github.com/handegar/fv1emu/base"
 )
 
+/**
+  The "msg" support standard Sprintf arguments.
+*/
 func Assert(mustBeTrue bool, msg string, args ...interface{}) {
 	if !mustBeTrue {
-		fmt.Printf("ERROR: %s\n", fmt.Sprintf("%s", args...))
-		panic("ASSERT failed")
-	}
-}
-
-func AssertFloat64(mustBeTrue bool, val float64, msg string, args ...interface{}) {
-	if !mustBeTrue {
-		fmt.Printf("ERROR: %s.\n       Value was %f.\n",
-			fmt.Sprintf(msg, args...), val)
+		fmt.Printf("ERROR: %s\n", fmt.Sprintf(msg, args...))
 		panic("ASSERT failed")
 	}
 }
