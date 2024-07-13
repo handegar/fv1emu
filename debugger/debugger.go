@@ -24,8 +24,8 @@ var showHelpScreen bool = false
 var showMemoryMap bool = false
 
 var previousStates map[uint]*dsp.State = make(map[uint]*dsp.State)
-
 var memoryCursor int = 0
+var boxTitleStyle = termui.NewStyle(termui.ColorRed, termui.ColorBlue)
 
 func Reset() {
 	previousStates = make(map[uint]*dsp.State)
@@ -60,13 +60,13 @@ func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 		helpLine := widgets.NewParagraph()
 		// FIXME: Can we center this line? (20220225 handegar)
 		helpLine.Text =
-			"[ESC/q:](fg:black) Quit [|](bg:black) " +
-				"[F1/h/?:](fg:black) Help [|](bg:black) " +
-				"[s/PgDn:](fg:black) Next sample [|](bg:black) " +
+			"[ESC/q:](fg:black) Quit [|](fg:white,bg:black) " +
+				"[F1/h/?:](fg:black) Help [|](fg:white,bg:black) " +
+				"[s/PgDn:](fg:black) Next sample [|](fg:white,bg:black) " +
 				"[n/Down:](fg:black) Next op "
 
 		helpLine.Border = false
-		helpLine.TextStyle = termui.NewStyle(termui.ColorWhite, termui.ColorBlue)
+		helpLine.TextStyle = boxTitleStyle
 		helpLine.SetRect(0, height-1, width, height)
 		ui.Render(helpLine)
 	}
@@ -82,10 +82,10 @@ func WaitForInput(state *dsp.State) string {
 		case "q", "<C-c>", "<Escape>":
 			if showHelpScreen {
 				showHelpScreen = false
-				onTerminalResized()
+				//onTerminalResized()
 			} else if showMemoryMap {
 				showMemoryMap = false
-				onTerminalResized()
+				//onTerminalResized()
 			} else {
 				return "quit"
 			}
@@ -124,7 +124,7 @@ func WaitForInput(state *dsp.State) string {
 			showRegistersAsFloats = !showRegistersAsFloats
 			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 		case "<Resize>":
-			onTerminalResized()
+			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 		}
 	}
 
@@ -138,7 +138,7 @@ func increaseMemoryCursor(count int) {
 	}
 
 	if showMemoryMap {
-		onTerminalResized()
+		UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 	}
 }
 
@@ -149,7 +149,7 @@ func decreaseMemoryCursor(count int) {
 	}
 
 	if showMemoryMap {
-		onTerminalResized()
+		UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 	}
 }
 
@@ -159,7 +159,7 @@ func renderHelpScreen() {
 
 	frame := widgets.NewParagraph()
 	frame.Title = "  Help / Keys / Keywords  "
-	frame.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	frame.TitleStyle = boxTitleStyle
 	frame.SetRect(0, 0, width, height)
 	ypos += 1
 
@@ -223,7 +223,7 @@ func updateCodeView(opCodes []base.Op, state *dsp.State) {
 
 	code := widgets.NewParagraph()
 	code.Title = fmt.Sprintf("  Instructions (%d) ", len(opCodes))
-	code.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	code.TitleStyle = boxTitleStyle
 
 	code.Text = generateCodeListing(opCodes, state, height)
 	code.SetRect(0, 0, width, height)
@@ -246,9 +246,11 @@ func generateCodeListing(opCodes []base.Op, state *dsp.State, screenHeight int) 
 		}
 
 		op := opCodes[lineNo+i]
-		color := "fg:white"
-		if (lineNo + i) == int(state.IP) {
-			color = "fg:red,bg:white,mod:bold"
+		codeColor := "fg:white"
+		numColor := "fg:yellow"
+		if (lineNo + i) == int(state.IP) { // Cursor line?
+			codeColor = "fg:red,bg:white,mod:bold"
+			numColor = "fg:black,bg:white,mod:bold"
 		}
 
 		if op.Name == "SKP" {
@@ -257,15 +259,15 @@ func generateCodeListing(opCodes []base.Op, state *dsp.State, screenHeight int) 
 
 		for _, p := range skpTargets {
 			if p == ((lineNo + i) - 1) {
-				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo+i+1)
+				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo+i)
 				lines = append(lines, skpLine)
 				break
 			}
 		}
 
-		str := fmt.Sprintf("[%3d](fg:yellow)  [%s](%s)",
-			lineNo+i+1,
-			disasm.OpCodeToString(op, lineNo+i, false), color)
+		str := fmt.Sprintf("[%3d](%s)[  %s  ](%s)",
+			lineNo+i, numColor,
+			disasm.OpCodeToString(op, lineNo, false), codeColor)
 		lines = append(lines, str)
 
 	}
@@ -297,10 +299,9 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	if state.RUN_FLAG {
 		rfInt = 1
 	}
-	stateStr := fmt.Sprintf("[IP:](fg:yellow,mod:bold) %d, [ACC:](fg:yellow,mod:bold) %s (%d)\n"+
-		"[PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
-		"[ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RUN:](fg:yellow) %d\n",
-		state.IP,
+	stateStr := fmt.Sprintf(" [ACC:](fg:yellow,mod:bold) %s (%d)\n"+
+		" [PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
+		" [ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RUN:](fg:yellow) %d\n",
 		// FIXME: Is the ACC an S.23 or an S1.14? (20220305 handegar)
 		overflowColored(state.ACC.ToFloat64(), -2.0, 2.0), state.ACC.Value,
 		overflowColored(state.PACC.ToFloat64(), -2.0, 2.0),
@@ -309,13 +310,13 @@ func updateStateView(state *dsp.State, sampleNum int) {
 		state.DelayRAMPtr,
 		rfInt)
 
-	ioStr := fmt.Sprintf("[ADCL:](fg:yellow) %f, [ADCR:](fg:yellow) %f\n"+
-		"[DACL:](fg:green) %s, [DACR:](fg:green) %s\n",
+	ioStr := fmt.Sprintf(" [ADCL:](fg:yellow) %f, [ADCR:](fg:yellow) %f\n"+
+		" [DACL:](fg:green) %s, [DACR:](fg:green) %s\n",
 		state.Registers[base.ADCL].ToFloat64(), state.Registers[base.ADCR].ToFloat64(),
 		overflowColored(state.Registers[base.DACL].ToFloat64(), -1.0, 1.0),
 		overflowColored(state.Registers[base.DACR].ToFloat64(), -1.0, 1.0))
 
-	potStr := fmt.Sprintf("[POT0](fg:cyan)=%.4f, [POT1](fg:cyan)=%.4f, [POT2](fg:cyan)=%.4f\n",
+	potStr := fmt.Sprintf(" [POT0](fg:cyan)=%.4f, [POT1](fg:cyan)=%.4f, [POT2](fg:cyan)=%.4f\n",
 		state.Registers[base.POT0].ToFloat64(),
 		state.Registers[base.POT1].ToFloat64(),
 		state.Registers[base.POT2].ToFloat64())
@@ -323,10 +324,10 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	// Sine LFOs
 	sin0hz := (float64(state.Registers[base.SIN0_RATE].Value) * settings.ClockFrequency) / (2 * math.Pi * (1 << 17))
 	sin1hz := (float64(state.Registers[base.SIN1_RATE].Value) * settings.ClockFrequency) / (2 * math.Pi * (1 << 17))
-	lfoStr := fmt.Sprintf("[SIN0](fg:yellow)  [Rate:](fg:cyan) %d [\u03B10:](fg:cyan) %f\n"+
-		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
-		"[SIN1](fg:yellow)  [Rate:](fg:cyan) %d [\u03B11:](fg:cyan) %f\n"+
-		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n",
+	lfoStr := fmt.Sprintf(" [SIN0](fg:yellow)  [Rate:](fg:cyan) %d [\u03B10:](fg:cyan) %f\n"+
+		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
+		" [SIN1](fg:yellow)  [Rate:](fg:cyan) %d [\u03B11:](fg:cyan) %f\n"+
+		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n",
 		state.Registers[base.SIN0_RATE].Value, dsp.GetLFOValue(0, state, false),
 		state.Registers[base.SIN0_RANGE].Value, state.Registers[base.SIN0_RANGE].ToFloat64(), sin0hz,
 		state.Registers[base.SIN1_RATE].Value, dsp.GetLFOValue(1, state, false),
@@ -335,10 +336,10 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	// Ramp LFOs
 	rmp0hz := float64(state.Registers[base.RAMP0_RATE].Value) / 512.0
 	rmp1hz := float64(state.Registers[base.RAMP1_RATE].Value) / 512.0
-	lfoStr += fmt.Sprintf("[RAMP0](fg:yellow) [Rate:](fg:cyan) %d [\u03940:](fg:cyan) %f\n"+
-		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
-		"[RAMP1](fg:yellow) [Rate:](fg:cyan) %d [\u03941:](fg:cyan) %f\n"+
-		"      [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f",
+	lfoStr += fmt.Sprintf(" [RAMP0](fg:yellow) [Rate:](fg:cyan) %d [\u03940:](fg:cyan) %f\n"+
+		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
+		" [RAMP1](fg:yellow) [Rate:](fg:cyan) %d [\u03941:](fg:cyan) %f\n"+
+		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f",
 		state.Registers[base.RAMP0_RATE].Value, dsp.GetLFOValue(2, state, false),
 		base.RampAmpValues[state.Registers[base.RAMP0_RANGE].Value], state.Registers[base.RAMP0_RANGE].ToFloat64(), rmp0hz,
 		state.Registers[base.RAMP1_RATE].Value, dsp.GetLFOValue(3, state, false),
@@ -347,7 +348,7 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	vPos := 0
 	stateP := widgets.NewParagraph()
 	stateP.Title = fmt.Sprintf("  State (sample #%d)  ", sampleNum)
-	stateP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	stateP.TitleStyle = boxTitleStyle
 	stateP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	stateP.Text = stateStr + ioStr + potStr
 	stateP.SetRect(twidth/2-1, vPos, twidth, vPos+8)
@@ -355,7 +356,7 @@ func updateStateView(state *dsp.State, sampleNum int) {
 
 	lfoP := widgets.NewParagraph()
 	lfoP.Title = "  LFOs  "
-	lfoP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	lfoP.TitleStyle = boxTitleStyle
 	lfoP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	lfoP.Text = lfoStr
 	lfoP.SetRect(twidth/2-1, vPos, twidth, vPos+10)
@@ -364,14 +365,14 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	regStr := ""
 	for i := 0x20; i <= 0x3f; i += 2 {
 		if showRegistersAsFloats {
-			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %s  ",
+			regStr += fmt.Sprintf(" [Reg%3d:](fg:cyan) %s  ",
 				i-0x20, overflowColored(state.Registers[i].ToFloat64(), -1.0, 1.0))
-			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %s\n",
+			regStr += fmt.Sprintf(" [Reg%3d:](fg:cyan) %s\n",
 				i-0x20+1, overflowColored(state.Registers[i+1].ToFloat64(), -1.0, 1.0))
 		} else {
-			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %d  ",
+			regStr += fmt.Sprintf(" [Reg%3d:](fg:cyan) %d  ",
 				i-0x20, state.Registers[i].ToInt32())
-			regStr += fmt.Sprintf("[Reg%3d:](fg:cyan) %d\n",
+			regStr += fmt.Sprintf(" [Reg%3d:](fg:cyan) %d\n",
 				i-0x20+1, state.Registers[i+1].ToInt32())
 		}
 	}
@@ -383,7 +384,7 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	} else {
 		regP.Title += " (as integers)  "
 	}
-	regP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	regP.TitleStyle = boxTitleStyle
 	regP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	regP.Text = regStr
 	regP.SetRect(twidth/2-1, vPos, twidth, theight-5)
@@ -406,7 +407,7 @@ func updateMetaInfoView(opCodes []base.Op, state *dsp.State) {
 
 	infoP := widgets.NewParagraph()
 	infoP.Title = "  Info  "
-	infoP.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	infoP.TitleStyle = boxTitleStyle
 	infoP.Text = infoStr
 	infoP.SetRect(0, theight-5, twidth, theight)
 
@@ -422,9 +423,4 @@ func updateMetaInfoView(opCodes []base.Op, state *dsp.State) {
 
 	ui.Render(infoP)
 	ui.Render(versionP)
-}
-
-func onTerminalResized() {
-	termui.Clear()
-	UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 }
