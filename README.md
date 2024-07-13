@@ -127,6 +127,8 @@ The debugger also has a simple Delay Memory inspector.
 
  - A search on Github for SpinASM programs: https://github.com/search?q=extension%3Aspcd
 
+ - A collection of programs: https://github.com/mstratman/fv1-programs/tree/master/docs/files
+
 
 ## Notes
 
@@ -142,5 +144,5 @@ The debugger also has a simple Delay Memory inspector.
   - Converting a Intel HEX file to BIN:
     
         $ objcopy -I ihex original.hex -O binary newfile.bin
-        
-        
+          
+  - On linux Ocenaudio is a nice editor with auto-reload       
