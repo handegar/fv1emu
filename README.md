@@ -81,7 +81,7 @@ All dependencies are listed in "go.mod"
     -trail float
     	Additional trail length (seconds)
 
-    $ ./fv1emu --in INPUT.WAV --out OUTPUT.WAV --bin ALGO.BIN 
+    $ ./fv1emu --in INPUT.WAV --out OUTPUT.WAV --bin ALGO.BIN
 
 
 ## Debugger
@@ -99,7 +99,7 @@ The debugger also has a simple Delay Memory inspector.
 
  - Calibrate the LFO with an actual FV-1 DSP.
  - Get the Ramp-LFO right.
- - Catch overflows within operations (the register.Clamp24Bit() function) and show warnings in 
+ - Catch overflows within operations (the register.Clamp24Bit() function) and show warnings in
    the debugger.
  - Test on MacOS and Windows.
  - Better streaming, preferably realtime streaming.
@@ -118,6 +118,7 @@ The debugger also has a simple Delay Memory inspector.
  - Better memory-visualization
  - Keep track and visualize allocated memory chunks in addition to the
    entire memory-map.
+ - Add a reset function in the debugger (or go-to)
 
 ## Links
 
@@ -133,16 +134,16 @@ The debugger also has a simple Delay Memory inspector.
 ## Notes
 
   - Converting UTF-16 .spn files to UTF-8:
- 
+
         $ iconv -f UTF-16LE -t UTF-8 <infile> -o <outfile>
-        
+
   - Plotting the content of a CSV register dump:
     - Execute the following script available in this repo:
-    
+
         $ ./csv-plot.sh CSVFILE
- 
+
   - Converting a Intel HEX file to BIN:
-    
+
         $ objcopy -I ihex original.hex -O binary newfile.bin
-          
-  - On linux Ocenaudio is a nice editor with auto-reload       
+
+  - On linux Ocenaudio is a nice editor with auto-reload
