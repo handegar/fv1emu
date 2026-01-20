@@ -41,15 +41,15 @@ func CHO_SOF(op base.Op, state *State) error {
 		}
 		xfade := GetXFadeFromLFO(lfo, typ, state)
 		if (flags & base.CHO_COMPC) != 0 {
-			xfade = 1.0 - xfade
+			xfade = 0.9999 - xfade
 		}
 		state.scaleReg.SetFloat64(xfade)
 	} else { // =================================  Regular envelope ==
 		if (flags & base.CHO_COMPC) != 0 {
 			lfo = 1.0 - lfo
 		}
-		scaledLFO := ScaleLFOValue(lfo, typ, state)
-		normLFO := NormalizeLFOValue(scaledLFO, typ, state)
+		//scaledLFO := ScaleLFOValue(lfo, typ, state)
+		normLFO := NormalizeLFOValue(lfo, typ, state)
 		state.scaleReg.SetFloat64(normLFO)
 	}
 

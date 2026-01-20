@@ -2,6 +2,7 @@ package dsp
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/utils"
@@ -50,7 +51,7 @@ func CHO_RDA(op base.Op, state *State) error {
 		}
 
 		if (flags & base.CHO_COMPC) != 0 {
-			xfade = 1.0 - xfade
+			xfade = 0.9999 - xfade
 		}
 		state.scaleReg.SetFloat64(xfade)
 		state.offsetReg.SetInt32(int32(addr))
@@ -62,18 +63,11 @@ func CHO_RDA(op base.Op, state *State) error {
 
 		idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 		if err != nil {
+			fmt.Printf("ERROR: %s\n", err)
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 		}
 
 		state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
-
-		// Re-get LFO value for interpolation if RPTR2 was used
-		// FIXME: This needed? ElmGen does not.. (20220923 handegar)
-		/*
-			if (flags & base.CHO_RPTR2) != 0 {
-				lfo = GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
-			}
-		*/
 
 		if (flags & base.CHO_COMPC) != 0 {
 			// FIXME: Is this shift needed? (20220923 handegar)
@@ -81,6 +75,7 @@ func CHO_RDA(op base.Op, state *State) error {
 				lfo = (lfo + 1.0) / 2.0 // Shift to [0 .. 1.0]
 			}
 			state.scaleReg.SetFloat64(0.9999 - lfo)
+			lfo = (2*lfo - 1.0)
 		} else {
 			state.scaleReg.SetFloat64(lfo)
 		}

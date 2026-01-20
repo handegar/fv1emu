@@ -15,8 +15,8 @@ import (
 	"github.com/fatih/color"
 	ui "github.com/gizak/termui/v3"
 
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/speaker"
+	//"github.com/goxpl/beep/v2"
+	//"github.com/goxpl/beep/v2/speaker"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/debugger"
@@ -55,27 +55,24 @@ func parseCommandLineParameters() bool {
 		settings.Stream, "Stream output to sound device")
 
 	//
-	// Potentimeters settings
+	// Potensiometers settings
 	//
 	var allPotsToMax bool = false
 	flag.BoolVar(&allPotsToMax, "pmax",
-		allPotsToMax, "Set all potentiometers to maximum")
+		allPotsToMax, "Set all potensiometers to maximum")
 	var allPotsToMin bool = false
 	flag.BoolVar(&allPotsToMin, "pmin",
-		allPotsToMin, "Set all potentiometers to minimum")
+		allPotsToMin, "Set all potensiometers to minimum")
 
 	flag.Float64Var(&settings.Pot0Value, "p0", settings.Pot0Value,
-		"Potentiometer 0 value (0 .. 1.0)")
+		"Potensiometer 0 value (0 .. 1.0)")
 	flag.Float64Var(&settings.Pot1Value, "p1", settings.Pot1Value,
-		"Potentiometer 1 value (0 .. 1.0)")
+		"Potensiometer 1 value (0 .. 1.0)")
 	flag.Float64Var(&settings.Pot2Value, "p2", settings.Pot2Value,
-		"Potentiometer 2 value (0 .. 1.0)")
+		"Potensiometer 2 value (0 .. 1.0)")
 
-	// FIXME: Not fully implemented yet (20220305 handegar)
-	/*
-		flag.Float64Var(&settings.ClockFrequency, "clock", settings.ClockFrequency,
-			"Chrystal frequency")
-	*/
+	flag.Float64Var(&settings.ClockFrequency, "clock", settings.ClockFrequency,
+		"Chrystal frequency")
 
 	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds,
 		"Additional trail length (seconds)")
@@ -262,7 +259,7 @@ func main() {
 		disasm.PrintCodeListing(opCodes)
 	}
 
-	printPotentiometersInUse(opCodes)
+	printPotensiometersInUse(opCodes)
 	printDACsAndADCsInUse(opCodes)
 
 	var regCSVWriter *csv.Writer = nil
@@ -381,6 +378,7 @@ func main() {
 			}
 		}
 	*/
+
 	if settings.Debugger {
 		ui.Close()
 		color.Yellow("* No more samples to process.")
@@ -436,21 +434,23 @@ func main() {
 
 	if settings.Stream {
 		color.Cyan("* Forwarding buffer to sound-device (CTRL-C to quit)\n")
-		s := new(writer.WriteStreamer)
-		s.Data = outSamples
-		err = speaker.Init(wavFormat.SampleRate, len(outSamples))
-		if err != nil {
-			log.Fatalf("ERROR: Failed to initialize 'beep.Speaker': %v", err)
-		}
+		log.Fatal("Ouput to sound-device temp. disabled.")
+		/*
+			s := new(writer.WriteStreamer)
+			s.Data = outSamples
+			err = speaker.Init(wavFormat.SampleRate, len(outSamples))
+			if err != nil {
+				log.Fatalf("ERROR: Failed to initialize 'beep.Speaker': %v", err)
+			}
 
-		// FIXME: The "done" signal does not work properly
-		// yet. Investigate. (20220310 handegar)
-		done := make(chan bool, 1)
-		speaker.Play(beep.Seq(s, beep.Callback(func() {
-			done <- true
-		})))
-		<-done
-
+			// FIXME: The "done" signal does not work properly
+			// yet. Investigate. (20220310 handegar)
+			done := make(chan bool, 1)
+			speaker.Play(beep.Seq(s, beep.Callback(func() {
+				done <- true
+			})))
+			<-done
+		*/
 	} else {
 		if !settings.Debugger {
 			writer.SaveAsWAV(settings.OutputWav, wavFormat, outSamples)
@@ -531,8 +531,8 @@ func processSample(inRight float64, inLeft float64, state *dsp.State, opCodes []
 	return outLeft, outRight, cont
 }
 
-func printPotentiometersInUse(opCodes []base.Op) {
-	pot0used, pot1used, pot2used := dsp.PotentiometersInUse(opCodes)
+func printPotensiometersInUse(opCodes []base.Op) {
+	pot0used, pot1used, pot2used := dsp.PotensiometersInUse(opCodes)
 
 	var pots []string
 	if pot0used {
@@ -546,9 +546,9 @@ func printPotentiometersInUse(opCodes []base.Op) {
 	}
 
 	if len(pots) == 0 {
-		color.Cyan("* No potentiometers in use.\n")
+		color.Cyan("* No potensiometers in use.\n")
 	} else {
-		color.Cyan("* Potentiometers in use: %s\n", strings.Join(pots, ", "))
+		color.Cyan("* Potensiometers in use: %s\n", strings.Join(pots, ", "))
 
 	}
 }

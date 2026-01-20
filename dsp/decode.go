@@ -92,8 +92,8 @@ func DecodeOpCodes(buffer []uint32) []base.Op {
 	return ret
 }
 
-// Figure out which potentiometers are in use
-func PotentiometersInUse(ops []base.Op) (bool, bool, bool) {
+// Figure out which potensiometers are in use
+func PotensiometersInUse(ops []base.Op) (bool, bool, bool) {
 	pot0 := false
 	pot1 := false
 	pot2 := false

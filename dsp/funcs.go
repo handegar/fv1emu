@@ -41,10 +41,10 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 		// FIXME: The LFO should probably be updated in sync
 		// with an external clock, not per
 		// instruction. (20220227 handegar)
-		updateSinLFO(state, 0)
-		updateSinLFO(state, 1)
-		updateRampLFO(state, 0)
-		updateRampLFO(state, 1)
+		// FIXME: It seems like LFOs might be update once per sample period but at
+		// different times (ref: // http://www.spinsemi.com/forum/viewtopic.php?p=5086#p5086)
+		state.UpdateRampLFOs()
+		state.UpdateSineLFOs()
 
 		op := opCodes[state.IP]
 
@@ -94,115 +94,22 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 	// close to how the FV-1 operates (and sounds).
 	//
 	for cycles < settings.InstructionsPerSample {
-		updateSinLFO(state, 0)
-		updateSinLFO(state, 1)
-		updateRampLFO(state, 0)
-		updateRampLFO(state, 1)
+		state.UpdateSineLFOs()
+		state.UpdateRampLFOs()
 		cycles += 1
 	}
 
 	return true // Lets continue!
 }
 
-func updateSinLFO(state *State, num int) {
-	//
-	// Frequency formula (from the datasheet):
-	//   f = (RATE*CLOCKFREQ)/(2*PI*(2^17)
-	// Allowed values for RATE is 1..512 => 0..20Hz
-	//
+/*
+Returns the LFO value, but 1/2 further into the cycle.
+NB: This is only valid for RAMP LFOs.
 
-	// This is a magic constant I have figured out by calibrating the
-	// emulated result against a real FV-1 chip. I assume this value is
-	// due to some internal mechanism in the chip.
-	calibrationFactor := 1 / 4.0
-
-	if num == 0 {
-		f0 := float64(state.Registers[base.SIN0_RATE].ToInt32()) //* settings.ClockFrequency
-		f0 = f0 / (2.0 * math.Pi * (2 << 11))
-
-		utils.Assert(f0 >= 0.0 && f0 <= 20.0, "Sin0 rate out of range [0..20hz]: %f", f0)
-
-		sin0delta := f0 / float64(settings.InstructionsPerSample)
-		state.Sin0State.Angle += sin0delta * calibrationFactor
-	} else {
-		f1 := float64(state.Registers[base.SIN1_RATE].ToInt32()) //* settings.ClockFrequency
-		f1 = f1 / (2.0 * math.Pi * (2 << 11))
-
-		utils.Assert(f1 >= 0.0 && f1 <= 20.0, "Sin1 rate out of range [0..20hz]: %f", f1)
-
-		sin1delta := f1 / float64(settings.InstructionsPerSample)
-		state.Sin1State.Angle += sin1delta * calibrationFactor
-	}
-}
-
-/**
-  This generates a sawtooth of [0 .. 0.5].
-*/
-func updateRampLFO(state *State, num int) {
-	//
-	// Frequency formula (from the datasheet):
-	//   f=RATE/512
-	// Allowed values for RATE (16bit) is 0..65565 -> 0..128 hz
-	//
-
-	// This is a magic constant I have figured out by calibrating the
-	// emulated result against a real FV-1 chip. I assume this value is
-	// due to some internal mechanism in the chip.
-	calibrationFactor := 8.0
-
-	if num == 0 {
-		range0 := base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()]
-
-		if range0 > 0.0 {
-			rate := state.Registers[base.RAMP0_RATE].ToInt32()
-			utils.Assert(rate >= -64*512 && rate <= 128*512,
-				"Ramp0 rate out of range [0..128hz]: %d", rate/512)
-			delta := (float64(rate) / float64(range0)) / settings.ClockFrequency
-			delta = delta / float64(settings.InstructionsPerSample)
-			state.Ramp0State.Value -= delta * calibrationFactor
-		}
-
-		// New cycle?
-		for state.Ramp0State.Value < 0 {
-			state.Ramp0State.Value = 0.5
-		}
-		for state.Ramp0State.Value > 0.5 {
-			state.Ramp0State.Value -= 0.5
-		}
-
-	} else {
-		range1 := base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()]
-		if range1 > 0.0 {
-			rate := state.Registers[base.RAMP1_RATE].ToInt32()
-			utils.Assert(rate >= -64*512 && rate <= 128*512,
-				"Ramp1 rate out of range1 [0..128hz]: %d", rate/512)
-
-			delta := (float64(rate) / float64(range1)) / settings.ClockFrequency
-			delta = delta / float64(settings.InstructionsPerSample)
-			state.Ramp1State.Value -= delta * calibrationFactor
-		}
-
-		// New cycle?
-		for state.Ramp1State.Value < 0 {
-			state.Ramp1State.Value += 0.5
-		}
-
-		for state.Ramp1State.Value > 0.5 {
-			state.Ramp1State.Value -= 0.5
-		}
-
-	}
-
-}
-
-/**
-  Returns the LFO value, but 1/2 further into the cycle.
-  NB: This is only valid for RAMP LFOs.
-
-  // FIXME: This func needs to be re-checked to see if it is
-  // correct. We should also get rid of the daft while/for loop by
-  // using some bitmask'ing on integers instead.
-  // (20220917 handegar)
+// FIXME: This func needs to be re-checked to see if it is
+// correct. We should also get rid of the daft while/for loop by
+// using some bitmask'ing on integers instead.
+// (20220917 handegar)
 */
 func GetLFOValuePlusHalfCycle(lfoType int, lfoValue float64) float64 {
 	if isSinLFO(lfoType) {
@@ -218,65 +125,67 @@ func GetLFOValuePlusHalfCycle(lfoType int, lfoValue float64) float64 {
 	return lfo
 }
 
-/**
-  Return a LFO value scaled with the amplitude value specified in the state
+/*
+Return a LFO value scaled with the amplitude value specified in the state
+
+	NOTE: The scaled value is an integer, ie *NOT* <0 .. 1.0>
 */
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
-
 	amp := 1.0
 	switch lfoType {
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN0_RANGE).Value)
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).ToInt32())
+		amp = float64(state.GetRegister(base.SIN1_RANGE).Value)
 	case base.LFO_RMP0:
-		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP0_RANGE).ToInt32()])
+		amp = float64(state.GetRegister(base.RAMP0_RANGE).Value)
 	case base.LFO_RMP1:
-		amp = float64(base.RampAmpValues[state.GetRegister(base.RAMP1_RANGE).ToInt32()])
+		amp = float64(state.GetRegister(base.RAMP1_RANGE).Value)
 	}
 
-	result := value * amp
-
-	/*
-		utils.Assert(result < 1.0 && result >= -1.0,
-			"ScaleLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
-				value, lfoType, result)
-	*/
-	return result
+	return value * amp / 16.0
 }
 
-/**
-  Will "normalize" the LFO value to a number between [-1.0 .. 0.999]
+/*
+Will "normalize" the LFO value to a number between [-1.0 .. 0.999]
 */
 func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
-	sinFactor := 1.0 / float64((1<<15)-1)
-	rmpFactor := 1.0 / float64((1<<12)-1)
-
 	ret := 0.0
 	switch lfoType {
-	case base.LFO_SIN0, base.LFO_COS0:
-		ret = value * sinFactor
-	case base.LFO_SIN1, base.LFO_COS1:
-		ret = value * sinFactor
-	case base.LFO_RMP0:
-		ret = value * rmpFactor
-	case base.LFO_RMP1:
-		ret = value * rmpFactor
+	case base.LFO_SIN0, base.LFO_COS0, base.LFO_SIN1, base.LFO_COS1:
+		ret = value / float64(32767) // 15 bits
+	case base.LFO_RMP0, base.LFO_RMP1:
+		ret = value / float64(4096)
 	}
 
-	utils.Assert(ret < 1.0 && ret >= -1.0,
-		"NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
-		value, lfoType, ret)
+	/*
+		utils.Assert(ret < 1.0 && ret >= -1.0,
+			"NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
+			value, lfoType, ret)
+	*/
+	if ret > 1.0 || ret < -1.0 {
+		fmt.Printf("NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)\n",
+			value, lfoType, ret)
+		if ret > 1.0 {
+			ret = 0.99999
+		}
+		if ret < -1.0 {
+			ret = -1.0
+		}
+	}
 
 	return ret
 }
 
-/**
-  Return the normalized LFO value
-  ie. a value from  <-1.0 .. 1.0>
+/*
+Return the normalized LFO value
+ie. a value from  <-1.0 .. 1.0>
 
-  Set the 'storeValue' parameter to TRUE when the "REG" keyword is
-  used for the "CHO RDA" instruction.
+Set the 'storeValue' parameter to TRUE when the "REG" keyword is
+used for the "CHO RDA" instruction.
+
+"REG" is set => fetch LFO value from system, store for later use. Return Value.
+"REG" not set => Return whatever is stored last time REG was specified.
 */
 func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	lfo := 0.0
@@ -316,25 +225,24 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 
 	switch lfoType {
 	case base.LFO_SIN0: // Sine
-		lfo = math.Sin(state.Sin0State.Angle)
+		lfo = state.Sin0Osc.GetSine()
 		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_SIN1:
-		lfo = math.Sin(state.Sin1State.Angle)
+		lfo = state.Sin1Osc.GetSine()
 		state.sin1LFOReg.SetFloat64(lfo)
-
 	case base.LFO_COS0: // Cosine
-		lfo = math.Cos(state.Sin0State.Angle) * 0.9999
+		lfo = state.Sin0Osc.GetCosine()
 		state.sin0LFOReg.SetFloat64(lfo)
 	case base.LFO_COS1:
-		lfo = math.Cos(state.Sin1State.Angle) * 0.9999
+		lfo = state.Sin1Osc.GetCosine()
 		state.sin1LFOReg.SetFloat64(lfo)
 
 	case base.LFO_RMP0: // Ramps
-		lfo = state.Ramp0State.Value
+		lfo = state.Ramp0Osc.GetValue()
 		utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO Ramp0 range outside [0 .. 0.5] (was %f)", lfo)
 		state.ramp0LFOReg.SetFloat64(lfo)
 	case base.LFO_RMP1:
-		lfo = state.Ramp1State.Value
+		lfo = state.Ramp1Osc.GetValue()
 		utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO Ramp1 range outside [0 .. 0.5] (was %f)", lfo)
 		state.ramp1LFOReg.SetFloat64(lfo)
 
@@ -363,10 +271,8 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	return lfo
 }
 
-//
 // This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
 // Outputs a [0 .. 1.0] range.
-//
 func GetXFadeFromLFO__OLD(lfo float64, typ int, state *State) float64 {
 	if isSinLFO(typ) {
 		panic("Cannot crossfade a SIN LFO")
@@ -416,10 +322,8 @@ func GetXFadeFromLFO__OLD(lfo float64, typ int, state *State) float64 {
 	return val
 }
 
-//
 // This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
 // Outputs a [0 .. 0.5] ranged "pyramid".
-//
 func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	if isSinLFO(typ) {
 		panic("Cannot crossfade a SIN LFO")
@@ -427,9 +331,9 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 
 	amp := 0.0
 	if typ == 0 {
-		amp = float64(base.RampAmpValues[state.Registers[base.RAMP0_RANGE].ToInt32()])
+		amp = float64(state.Registers[base.RAMP0_RANGE].ToInt32())
 	} else {
-		amp = float64(base.RampAmpValues[state.Registers[base.RAMP1_RANGE].ToInt32()])
+		amp = float64(state.Registers[base.RAMP1_RANGE].ToInt32())
 	}
 
 	xfade := 0.25 - lfo
@@ -458,8 +362,8 @@ func capDelayRAMIndex(in int, state *State) (int, error) {
 	var err error = nil
 
 	if in > DELAY_RAM_SIZE {
-		err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (len=%d)",
-			in, DELAY_RAM_SIZE))
+		err = errors.New(fmt.Sprintf("DelayRAM index out of bounds: %d (size=%d, IP=%d)",
+			in, DELAY_RAM_SIZE, state.IP))
 	}
 
 	return in & (DELAY_RAM_SIZE - 1), err

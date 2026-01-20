@@ -12,7 +12,7 @@ var Stream = false
 // Do a code printout
 var PrintCode = true
 
-// Potentiometer values
+// Potensiometer values
 var Pot0Value = 0.5
 var Pot1Value = 0.5
 var Pot2Value = 0.5
@@ -45,7 +45,6 @@ var SkipToSample = -1
 // Only process N-samples
 var StopAtSample = -1
 
-//
 var ProgramNumber = 0
 
 // The simulator uses 32bits fixed floats but the FV-1 uses 24bits
@@ -60,9 +59,7 @@ var Disable24BitsClamping = false
 // Default filename will be 'reg-<NUM>.csv'. Ignored if value is < 0.
 var WriteRegisterToCSV = -1
 
-//
 // Debug stuff -- might disapear
-//
 var CHO_RDAL_is_NA = false
 var CHO_RDAL_is_NA_COMPC = false
 var CHO_RDAL_is_RPTR2 = false

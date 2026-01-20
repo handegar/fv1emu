@@ -115,7 +115,7 @@ var OpDocs = map[string]OpDoc{
 	},
 	"CHO RDA": {Short: "Chorus read from MEM",
 		Long: "Like the RDA instruction, CHO RDA will read a sample from the delay ram, " +
-			"multiply it by a coefficient and add the product to the previous content of ACC.",
+			"multiply it by a coefficient and an LFO and add the product to the previous content of ACC.",
 		Formulae: "See datasheet",
 	},
 	"CHO SOF": {Short: "Chorus scale and offset",
@@ -126,7 +126,7 @@ var OpDocs = map[string]OpDoc{
 		"available within the LFO block of the FV-1"*/
 		Formulae: "See datasheet",
 	},
-	"CHO RDAL": {Short: "Write to LFO to ACC",
+	"CHO RDAL": {Short: "Write the LFO value to ACC",
 		Long:     "CHO RDAL will read the current value of the selected LFO into ACC.",
 		Formulae: "LFO*1 -> ACC",
 	},

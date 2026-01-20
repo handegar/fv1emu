@@ -2,7 +2,6 @@ package debugger
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	termui "github.com/gizak/termui/v3"
@@ -73,8 +72,8 @@ func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 }
 
 /*
-   Returns the Event.ID string for events which is relevant for others
-   (quit, restart etc.)
+Returns the Event.ID string for events which is relevant for others
+(quit, restart etc.)
 */
 func WaitForInput(state *dsp.State) string {
 	for e := range ui.PollEvents() {
@@ -204,7 +203,7 @@ func renderHelpScreen() {
 		" [ADCR](fg:yellow):         Input value (right)\n" +
 		" [DACL](fg:yellow):         Output value (left)\n" +
 		" [DACR](fg:yellow):         Output value (right)\n" +
-		" [POT0-3](fg:yellow):       Potentiometer value [0 .. 1.0]\n"
+		" [POT0-3](fg:yellow):       Potensiometer value [0 .. 1.0]\n"
 
 	help.SetRect(1, ypos, width-1, ypos+(height-ypos)-12)
 	ypos += 12
@@ -321,29 +320,32 @@ func updateStateView(state *dsp.State, sampleNum int) {
 		state.Registers[base.POT1].ToFloat64(),
 		state.Registers[base.POT2].ToFloat64())
 
-	// Sine LFOs
-	sin0hz := (float64(state.Registers[base.SIN0_RATE].Value) * settings.ClockFrequency) / (2 * math.Pi * (1 << 17))
-	sin1hz := (float64(state.Registers[base.SIN1_RATE].Value) * settings.ClockFrequency) / (2 * math.Pi * (1 << 17))
+	// Sine LFOs (0 .. 512 => 0hz .. 20Hz)
+	sin0hz := (float64(state.Registers[base.SIN0_RATE].Value) / 256.0) * 20.0
+	sin1hz := (float64(state.Registers[base.SIN1_RATE].Value) / 256.0) * 20.0
+	sin0range := float64(state.Registers[base.SIN0_RANGE].Value) / 32767.0
+	sin1range := float64(state.Registers[base.SIN1_RANGE].Value) / 32767.0
+
 	lfoStr := fmt.Sprintf(" [SIN0](fg:yellow)  [Rate:](fg:cyan) %d [\u03B10:](fg:cyan) %f\n"+
-		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
+		"       [Amp:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
 		" [SIN1](fg:yellow)  [Rate:](fg:cyan) %d [\u03B11:](fg:cyan) %f\n"+
-		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n",
+		"       [Amp:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n",
 		state.Registers[base.SIN0_RATE].Value, dsp.GetLFOValue(0, state, false),
-		state.Registers[base.SIN0_RANGE].Value, state.Registers[base.SIN0_RANGE].ToFloat64(), sin0hz,
+		state.Registers[base.SIN0_RANGE].Value, sin0range, sin0hz,
 		state.Registers[base.SIN1_RATE].Value, dsp.GetLFOValue(1, state, false),
-		state.Registers[base.SIN1_RANGE].Value, state.Registers[base.SIN1_RANGE].ToFloat64(), sin1hz)
+		state.Registers[base.SIN1_RANGE].Value, sin1range, sin1hz)
 
 	// Ramp LFOs
-	rmp0hz := float64(state.Registers[base.RAMP0_RATE].Value) / 512.0
-	rmp1hz := float64(state.Registers[base.RAMP1_RATE].Value) / 512.0
+	rmp0hz := (float64(state.Registers[base.RAMP0_RATE].Value) / 32767) * 20.0
+	rmp1hz := (float64(state.Registers[base.RAMP1_RATE].Value) / 32767) * 20.0
 	lfoStr += fmt.Sprintf(" [RAMP0](fg:yellow) [Rate:](fg:cyan) %d [\u03940:](fg:cyan) %f\n"+
-		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
+		"       [Amp:](fg:cyan) %d [Hz:](fg:cyan) %.2f\n"+
 		" [RAMP1](fg:yellow) [Rate:](fg:cyan) %d [\u03941:](fg:cyan) %f\n"+
-		"       [Range:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f",
+		"       [Amp:](fg:cyan) %d [Hz:](fg:cyan) %.2f",
 		state.Registers[base.RAMP0_RATE].Value, dsp.GetLFOValue(2, state, false),
-		base.RampAmpValues[state.Registers[base.RAMP0_RANGE].Value], state.Registers[base.RAMP0_RANGE].ToFloat64(), rmp0hz,
+		state.Registers[base.RAMP0_RANGE].Value, rmp0hz,
 		state.Registers[base.RAMP1_RATE].Value, dsp.GetLFOValue(3, state, false),
-		base.RampAmpValues[state.Registers[base.RAMP1_RANGE].Value], state.Registers[base.RAMP1_RANGE].ToFloat64(), rmp1hz)
+		state.Registers[base.RAMP1_RANGE].Value, rmp1hz)
 
 	vPos := 0
 	stateP := widgets.NewParagraph()

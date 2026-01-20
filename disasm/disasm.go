@@ -226,19 +226,19 @@ func MULX_ToString(op base.Op) string {
 }
 
 func WRA_ToString(op base.Op) string {
-	return fmt.Sprintf("WRA   %d, %f",
+	return fmt.Sprintf("WRA   mem_%d, %f",
 		op.Args[0].RawValue,
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
 func WRAP_ToString(op base.Op) string {
-	return fmt.Sprintf("WRAP  %d, %f",
+	return fmt.Sprintf("WRAP  mem_%d, %f",
 		op.Args[0].RawValue,
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
 
 func RDA_ToString(op base.Op) string {
-	return fmt.Sprintf("RDA   %d, %f",
+	return fmt.Sprintf("RDA   mem_%d, %f",
 		op.Args[0].RawValue,
 		utils.QFormatToFloat64(op.Args[1].RawValue, 1, 9))
 }
@@ -309,11 +309,11 @@ func CHO_ToString(op base.Op) string {
 	cmd := ""
 	switch op.Args[4].RawValue {
 	case 0b10:
-		return fmt.Sprintf("CHO   SOF, %s, %s, %d",
+		return fmt.Sprintf("CHO   SOF, %s, %s, mem_%d",
 			typ, strings.Join(flags, "|"), addr)
 
 	case 0b0:
-		return fmt.Sprintf("CHO   RDA, %s, %s, %d",
+		return fmt.Sprintf("CHO   RDA, %s, %s, mem_%d",
 			typ, strings.Join(flags, "|"), addr)
 
 	case 0b11:

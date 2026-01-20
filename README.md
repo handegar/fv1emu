@@ -55,15 +55,15 @@ All dependencies are listed in "go.mod"
     -out string
     	Output wav-file (default "output.wav")
     -p0 float
-    	Potentiometer 0 value (0 .. 1.0) (default 0.5)
+    	Potensiometer 0 value (0 .. 1.0) (default 0.5)
     -p1 float
-    	Potentiometer 1 value (0 .. 1.0) (default 0.5)
+    	Potensiometer 1 value (0 .. 1.0) (default 0.5)
     -p2 float
-    	Potentiometer 2 value (0 .. 1.0) (default 0.5)
+    	Potensiometer 2 value (0 .. 1.0) (default 0.5)
     -pmax
-    	Set all potentiometers to maximum
+    	Set all potensiometers to maximum
     -pmin
-    	Set all potentiometers to minimum
+    	Set all potensiometers to minimum
     -print-code
     	Print program code (default true)
     -print-debug
@@ -129,6 +129,10 @@ The debugger also has a simple Delay Memory inspector.
  - A search on Github for SpinASM programs: https://github.com/search?q=extension%3Aspcd
 
  - A collection of programs: https://github.com/mstratman/fv1-programs/tree/master/docs/files
+
+ - A VST plugin with a FV-1 simulator: https://github.com/p-kai-n/spnsim
+
+ - A FV-1 VM running on a STM32: https://github.com/patrickdowling/fv1vm
 
 
 ## Notes

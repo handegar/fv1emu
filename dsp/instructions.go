@@ -30,14 +30,12 @@ var opTable = map[string]interface{}{
 		// C*LOG(|ACC|) + D
 		state.PACC.Copy(state.ACC)
 		acc := state.ACC.Abs().ToFloat64()
-		if acc <= 0.0 {
-			acc = 1.0 / (1 << 23)
-		}
 
-		state.workRegA.SetFloat64((math.Log10(acc) / math.Log10(2.0)) / 16.0)
-		state.workRegA.Mult(state.workReg1_14)
-		state.workRegA.Add(state.workReg0_10)
-		state.ACC.Copy(state.workRegA)
+		val := (math.Log10(acc) / math.Log10(2.0)) / 16.0
+		val = val * state.workReg1_14.ToFloat64()
+		val = val + state.workReg0_10.ToFloat64()
+		state.ACC.SetClampedFloat64(val)
+
 		return nil
 	},
 	"EXP": func(op base.Op, state *State) error {
@@ -213,24 +211,55 @@ var opTable = map[string]interface{}{
 
 		// Special handling for LFO registers and ADDR_PTR
 		accAsInt := state.ACC.ToInt32()
-		if regNo == base.RAMP0_RANGE || regNo == base.RAMP1_RANGE {
-			quantized := int32(4.0 * state.ACC.ToFloat64())
-			reg.SetInt32(quantized)
-		} else if regNo == base.SIN0_RANGE || regNo == base.SIN1_RANGE {
-			reg.SetInt32(accAsInt >> (24 - 15 - 1))
-		} else if regNo == base.RAMP0_RATE || regNo == base.RAMP1_RATE {
-			reg.SetInt32(int32(int16(accAsInt >> (24 - 16))))
-		} else if regNo == base.SIN0_RATE || regNo == base.SIN1_RATE {
+
+		switch regNo {
+		case base.SIN0_RATE, base.SIN1_RATE:
 			// FIXME: Allow negative freqs for sine? (20220923 handegar)
 			if accAsInt < 0 { // Don't allow a negative rate/freq
-				accAsInt = 0
+				accAsInt = -accAsInt
 			}
-			reg.SetInt32(accAsInt >> (24 - 9))
-		} else if regNo == base.ADDR_PTR {
+			rate := accAsInt >> (24 - 9 - 1)
+			reg.SetInt32(rate)
+			if regNo == base.SIN0_RATE {
+				state.Sin0Osc.SetFreq(rate)
+			} else {
+				state.Sin1Osc.SetFreq(rate)
+			}
+
+		case base.SIN0_RANGE, base.SIN1_RANGE:
+			amp := accAsInt >> (24 - 15 - 1)
+			reg.SetInt32(amp)
+			if regNo == base.SIN0_RATE {
+				state.Sin0Osc.SetAmp(amp)
+			} else {
+				state.Sin1Osc.SetAmp(amp)
+			}
+
+		case base.RAMP0_RATE, base.RAMP1_RATE:
+			freq := int32(int16(accAsInt >> (24 - 16)))
+			reg.SetInt32(freq)
+			if regNo == base.RAMP0_RATE {
+				state.Ramp0Osc.SetFreq(freq)
+			} else {
+				state.Ramp1Osc.SetFreq(freq)
+			}
+
+		case base.RAMP0_RANGE, base.RAMP1_RANGE:
+			amp := int16(4.0 * state.ACC.ToFloat64())
+			reg.SetInt32(int32(amp))
+			if regNo == base.RAMP0_RANGE {
+				state.Ramp0Osc.SetAmp(amp)
+			} else {
+				state.Ramp1Osc.SetAmp(amp)
+			}
+
+		case base.ADDR_PTR:
 			// This value will be down-scaled when used as
 			// we can only address 32768 memory bytes
 			reg.SetInt32(accAsInt)
-		} else { // Just a regular WRAX with ACC as a floating point value
+
+		default:
+			// Just a regular WRAX with ACC as a floating point value
 			reg.Copy(state.ACC)
 		}
 
@@ -267,7 +296,6 @@ var opTable = map[string]interface{}{
 		state.ACC.Mult(reg)
 		return nil
 	},
-
 	"LDAX": func(op base.Op, state *State) error {
 		regNo := int(op.Args[0].RawValue)
 		reg := state.GetRegister(regNo)
@@ -307,7 +335,7 @@ var opTable = map[string]interface{}{
 		if freq < 0 {
 			freq = 0
 			state.DebugFlags.SetInvalidSinLFOFlag(typ)
-		} else if freq > ((1 << 9) - 1) {
+		} else if freq > ((1 << 9) - 1) { // > 511
 			freq = (1 << 9) - 1
 			state.DebugFlags.SetInvalidSinLFOFlag(typ)
 		}
@@ -315,17 +343,21 @@ var opTable = map[string]interface{}{
 		if amp < 0 {
 			amp = 0
 			state.DebugFlags.SetInvalidSinLFOFlag(typ)
-		} else if amp > ((1 << 16) - 1) { // 32768
-			amp = (1 << 16) - 1
+		} else if amp > ((1 << 15) - 1) { // > 32768
+			amp = (1 << 15) - 1
 			state.DebugFlags.SetInvalidSinLFOFlag(typ)
 		}
 
 		if typ == 0 { // SIN0
-			state.GetRegister(base.SIN0_RATE).SetInt32(freq)
-			state.GetRegister(base.SIN0_RANGE).SetInt32(amp)
+			state.Registers[base.SIN0_RATE].SetInt32(freq)
+			state.Registers[base.SIN0_RANGE].SetInt32(int32(amp))
+			state.Sin0Osc.SetFreq(freq)
+			state.Sin0Osc.SetAmp(amp)
 		} else { // SIN1
-			state.GetRegister(base.SIN1_RATE).SetInt32(freq)
-			state.GetRegister(base.SIN1_RANGE).SetInt32(amp)
+			state.Registers[base.SIN1_RATE].SetInt32(freq)
+			state.Registers[base.SIN1_RANGE].SetInt32(int32(amp))
+			state.Sin1Osc.SetFreq(freq)
+			state.Sin1Osc.SetAmp(amp)
 		}
 
 		return nil
@@ -333,13 +365,13 @@ var opTable = map[string]interface{}{
 	"WLDR": func(op base.Op, state *State) error {
 		amp := base.RampAmpValues[op.Args[0].RawValue]
 
-		freq := int32(int16(op.Args[2].RawValue)) / 2
+		freq := int32(int16(op.Args[2].RawValue)) // Aka. 'rate'
 		typ := op.Args[3].RawValue
 
-		ampIdx, valid := base.RampAmpValuesMap[amp]
+		_, valid := base.RampAmpValuesMap[amp]
 		if !valid {
 			state.DebugFlags.SetInvalidRampLFOFlag(typ)
-			amp = 4
+			amp = 4096
 			msg := fmt.Sprintf("Ramp amplitude value (%d) is not "+
 				"512, 1024, 2048 or 4096", amp)
 			return errors.New(msg)
@@ -355,11 +387,15 @@ var opTable = map[string]interface{}{
 		}
 
 		if typ == 0 { // RAMP0
-			state.GetRegister(base.RAMP0_RATE).SetInt32(freq)
-			state.GetRegister(base.RAMP0_RANGE).SetInt32(ampIdx)
+			state.Registers[base.RAMP0_RATE].SetInt32(freq)
+			state.Registers[base.RAMP0_RANGE].SetInt32(int32(amp))
+			state.Ramp0Osc.SetFreq(freq)
+			state.Ramp0Osc.SetAmp(amp)
 		} else { // RAMP1
-			state.GetRegister(base.RAMP1_RATE).SetInt32(freq)
-			state.GetRegister(base.RAMP1_RANGE).SetInt32(ampIdx)
+			state.Registers[base.RAMP1_RATE].SetInt32(freq)
+			state.Registers[base.RAMP1_RANGE].SetInt32(int32(amp))
+			state.Ramp1Osc.SetFreq(freq)
+			state.Ramp1Osc.SetAmp(amp)
 		}
 
 		return nil
@@ -367,9 +403,9 @@ var opTable = map[string]interface{}{
 	"JAM": func(op base.Op, state *State) error {
 		typ := op.Args[0].RawValue
 		if typ == 0 {
-			state.Ramp0State.Value = 0
+			state.Ramp0Osc.Reset()
 		} else {
-			state.Ramp1State.Value = 0
+			state.Ramp1Osc.Reset()
 		}
 		return nil
 	},

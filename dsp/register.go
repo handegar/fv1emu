@@ -33,8 +33,10 @@ func NewRegister(value int32) *Register {
 	return r
 }
 
-/**
-  Create a new register with a specified Q-Format
+/*
+*
+
+	Create a new register with a specified Q-Format
 */
 func NewRegisterWithIntsAndFracs(value int32, intbits int, fractionbits int) *Register {
 	r := NewRegister(0)
@@ -63,8 +65,10 @@ func (r *Register) SetToMin24Bit() *Register {
 	return r
 }
 
-/**
-  Returns TRUE on second value if value were clamped
+/*
+*
+
+	Returns TRUE on second value if value were clamped
 */
 func (r *Register) Clamp24Bit() (*Register, bool) {
 	if settings.Disable24BitsClamping { // Shall we not perform clamping?
@@ -91,8 +95,10 @@ func (r *Register) extendSign() {
 	r.Value = r.Value >> (8 - r.IntBits)
 }
 
-/**
-  Set a different Q-Format value than S8.23
+/*
+*
+
+	Set a different Q-Format value than S8.23
 */
 func (r *Register) SetWithIntsAndFracs(value int32, intbits int, fractionbits int) *Register {
 	// Will the actual number fit?
@@ -121,7 +127,7 @@ func (r *Register) SetClampedFloat64(value float64) *Register {
 }
 
 func (r *Register) SetFloat64(value float64) *Register {
-	utils.Assert(value < 1.0 && value >= -1.0,
+	utils.Assert(value <= 1.0 && value >= -1.0,
 		"Register.SetFloat64(%f): Value out of range [-1.0 .. 0.9999]", value)
 	r.Value = int32(value * math.Pow(2, 23))
 	r.IntBits = 8
@@ -211,9 +217,11 @@ func (r *Register) IsSigned() bool {
 	return r.Value < 0
 }
 
-/**
-  'lowestBitsFraction' specifies the required precision for the compare.
-  E.g: lowestBitsFraction=3 -> epsilon=1/(2^3) (or 2^3 as an integer-value)
+/*
+*
+
+	'lowestBitsFraction' specifies the required precision for the compare.
+	E.g: lowestBitsFraction=3 -> epsilon=1/(2^3) (or 2^3 as an integer-value)
 */
 func (r *Register) EqualWithEpsilon(reg *Register, lowestBitsFraction int) bool {
 	a := r.Value >> (23 - (lowestBitsFraction - 1))
@@ -226,9 +234,11 @@ func (r *Register) EqualWithEpsilon(reg *Register, lowestBitsFraction int) bool 
 	return b-a <= 1
 }
 
-/**
-  Performs a compare with a precision matched to the least precise
-  register.
+/*
+*
+
+	Performs a compare with a precision matched to the least precise
+	register.
 */
 func (r *Register) Equal(reg *Register) bool {
 	a := r.Value
@@ -254,14 +264,26 @@ func (r *Register) LessThan(reg *Register) bool {
 	return r.Value < reg.Value
 }
 
-/**
+/*
+*
 Print a nicely formatted binary representation of the register to
 STDOUT.
 */
 func (r *Register) DebugPrint() {
 	fmt.Printf("\n")
-	fmt.Printf("        |MSB     24      16      8    LSB| S%d.%d\n", r.IntBits, r.FractionBits)
+
+	if r.IsSigned() {
+		fmt.Printf("        |MSB     24      16      8    LSB| S%d.%d (signed)\n", r.IntBits, r.FractionBits)
+	} else {
+		fmt.Printf("        |MSB     24      16      8    LSB| U%d.%d (unsigned)\n", r.IntBits, r.FractionBits)
+	}
+
 	fmt.Printf("        |........v.......v.......v.......|\n")
-	fmt.Printf("      [0b%32b], 0x%x, signed=%t\n", uint32(r.Value), uint32(r.Value), r.IsSigned())
+	if r.IsSigned() {
+		fmt.Printf("      [0b%32b], 0x%x, %d\n", int32(r.Value), int32(r.Value), int32(r.Value))
+	} else {
+		fmt.Printf("      [0b%32b], 0x%x, %d\n", uint32(r.Value), uint32(r.Value), uint32(r.Value))
+	}
+
 	fmt.Printf("         ^^^^^^^^,^^^^^^^^^^^^^^^^^^^^^^^\n")
 }

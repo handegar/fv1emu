@@ -1,15 +1,16 @@
 package dsp
 
 import (
-	"errors"
 	"fmt"
-	"runtime"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
 )
 
 const DELAY_RAM_SIZE = 0x8000 // 32k of delay RAM -> 1sec with a 32768Hz clock
+
+const RAMP_START = 0.0
+const RAMP_END = 0.5
 
 type State struct {
 	IP          uint                  // Instruction pointer
@@ -20,10 +21,10 @@ type State struct {
 	LR          *Register             // The last sample read from the DelayRAM
 	RUN_FLAG    bool                  // Only TRUE the first run of the program
 
-	Sin0State  SINLFOState
-	Sin1State  SINLFOState
-	Ramp0State RAMPState
-	Ramp1State RAMPState
+	Sin0Osc  SineOscillator
+	Sin1Osc  SineOscillator
+	Ramp0Osc RampOscillator
+	Ramp1Osc RampOscillator
 
 	DebugFlags *DebugFlags // Contains misc debug/error flags which will be set @ runtime
 
@@ -47,134 +48,14 @@ type State struct {
 	workReg4_6  *Register // S4.6
 }
 
-type DebugFlags struct {
-	InvalidRamp0Values bool
-	InvalidRamp1Values bool
-	InvalidSin0Values  bool
-	InvalidSin1Values  bool
-
-	OutOfBoundsMemoryRead  int
-	OutOfBoundsMemoryWrite int
-
-	InvalidRegister int // Not set yet
-
-	ACCOverflowCount  int
-	PACCOverflowCount int
-	LROverflowCount   int
-	DACROverflowCount int
-	DACLOverflowCount int
-
-	// Used when debugging
-	Ramp0Min float64
-	Ramp0Max float64
-	Ramp1Min float64
-	Ramp1Max float64
-	Sin0Min  float64
-	Sin0Max  float64
-	Sin1Min  float64
-	Sin1Max  float64
-	XFadeMin float64
-	XFadeMax float64
+func (s *State) UpdateSineLFOs() {
+	s.Sin0Osc.Update()
+	s.Sin1Osc.Update()
 }
 
-func (df *DebugFlags) SetInvalidSinLFOFlag(lfoNum int32) {
-	if lfoNum == 0 {
-		df.InvalidSin0Values = true
-	} else {
-		df.InvalidSin1Values = true
-	}
-}
-
-func (df *DebugFlags) SetInvalidRampLFOFlag(lfoNum int32) {
-	if lfoNum == 0 {
-		df.InvalidRamp0Values = true
-	} else {
-		df.InvalidRamp1Values = true
-	}
-}
-
-func (df *DebugFlags) IncreaseOutOfBoundsMemoryRead() error {
-	df.OutOfBoundsMemoryRead += 1
-
-	msg := "Out-of-bounds memory read: "
-	_, file, no, ok := runtime.Caller(1)
-	if ok {
-		msg += fmt.Sprintf("%s:%d", file, no)
-	}
-	return errors.New(msg)
-}
-
-func (df *DebugFlags) IncreaseOutOfBoundsMemoryWrite() error {
-	df.OutOfBoundsMemoryWrite += 1
-	msg := "Out-of-bounds memory write: "
-	_, file, no, ok := runtime.Caller(1)
-	if ok {
-		msg += fmt.Sprintf("%s:%d", file, no)
-	}
-	return errors.New(msg)
-}
-
-func (df *DebugFlags) Reset() {
-	df.InvalidRamp0Values = false
-	df.InvalidRamp1Values = false
-	df.InvalidSin0Values = false
-	df.InvalidSin1Values = false
-
-	df.OutOfBoundsMemoryRead = 0
-	df.OutOfBoundsMemoryWrite = 0
-
-	df.InvalidRegister = 0
-
-	df.ACCOverflowCount = 0
-	df.PACCOverflowCount = 0
-	df.LROverflowCount = 0
-
-	df.DACROverflowCount = 0
-	df.DACLOverflowCount = 0
-
-	// Internal stuff
-	df.Ramp0Min = 999.0
-	df.Ramp0Max = -999.0
-	df.Ramp1Min = 999.0
-	df.Ramp1Max = -999.0
-	df.XFadeMax = -999.0
-	df.XFadeMin = 999.0
-}
-
-func (df *DebugFlags) Print() {
-	fmt.Printf("DebugFlags:\n"+
-		" InvalidRamp0Values = %t\n"+
-		" InvalidRamp1Values = %t\n"+
-		" InvalidSin0Values = %t\n"+
-		" InvalidSin1Values = %t\n"+
-		" OutOfBoundsMemoryRead = %d\n"+
-		" OutOfBoundsMemoryWrite = %d\n"+
-		" InvalidRegister = %d\n"+
-		" ACCOverflowCount = %d\n"+
-		" PACCOverflowCount = %d\n"+
-		" LROverflowCount = %d\n"+
-		" DACROverflowCount = %d\n"+
-		" DACLOverflowCount = %d\n",
-		df.InvalidRamp0Values,
-		df.InvalidRamp1Values,
-		df.InvalidSin0Values,
-		df.InvalidSin1Values,
-		df.OutOfBoundsMemoryRead,
-		df.OutOfBoundsMemoryWrite,
-		df.InvalidRegister,
-		df.ACCOverflowCount,
-		df.PACCOverflowCount,
-		df.LROverflowCount,
-		df.DACROverflowCount,
-		df.DACLOverflowCount)
-}
-
-type SINLFOState struct {
-	Angle float64
-}
-
-type RAMPState struct {
-	Value float64
+func (s *State) UpdateRampLFOs() {
+	s.Ramp0Osc.Update()
+	s.Ramp1Osc.Update()
 }
 
 type RegisterBank map[int]*Register
@@ -227,10 +108,10 @@ func (s *State) Copy(in *State) {
 	s.ACC.Copy(in.ACC)
 	s.PACC.Copy(in.PACC)
 	s.LR.Copy(in.LR)
-	s.Sin0State.Angle = in.Sin0State.Angle
-	s.Sin1State.Angle = in.Sin1State.Angle
-	s.Ramp0State.Value = in.Ramp0State.Value
-	s.Ramp1State.Value = in.Ramp1State.Value
+	s.Sin0Osc.value = in.Sin0Osc.value
+	s.Sin1Osc.value = in.Sin1Osc.value
+	s.Ramp0Osc.value = in.Ramp0Osc.value
+	s.Ramp1Osc.value = in.Ramp1Osc.value
 	s.DelayRAMPtr = in.DelayRAMPtr
 
 	for i := 0; i < 64; i++ {
@@ -260,10 +141,10 @@ func (s *State) Reset() {
 	s.sin1LFOReg = NewRegister(0)
 	s.ramp0LFOReg = NewRegister(0)
 	s.ramp1LFOReg = NewRegister(0)
-	s.Sin0State.Angle = 0.0
-	s.Sin1State.Angle = 0.0
-	s.Ramp0State.Value = 0.5
-	s.Ramp1State.Value = 0.5
+	s.Sin0Osc.value = 0
+	s.Sin1Osc.value = 0
+	s.Ramp0Osc.Reset()
+	s.Ramp1Osc.Reset()
 
 	s.workRegA = NewRegister(0)
 	s.workRegB = NewRegister(0)
@@ -286,9 +167,12 @@ func (s *State) Reset() {
 		s.Registers[i] = NewRegister(0) // All registers are S.23 as default
 	}
 
-	s.GetRegister(base.POT0).SetClampedFloat64(settings.Pot0Value) // POT0,       (16)  Pot 0 input register
-	s.GetRegister(base.POT1).SetClampedFloat64(settings.Pot1Value) // POT1,       (17)  Pot 1 input register
-	s.GetRegister(base.POT2).SetClampedFloat64(settings.Pot2Value) // POT2,       (18)  Pot 2 input register
+	s.GetRegister(base.POT0).SetClampedFloat64(settings.Pot0Value) // POT0, (16) Pot 0 input register
+	s.GetRegister(base.POT1).SetClampedFloat64(settings.Pot1Value) // POT1, (17) Pot 1 input register
+	s.GetRegister(base.POT2).SetClampedFloat64(settings.Pot2Value) // POT2, (18) Pot 2 input register
+
+	s.GetRegister(base.RAMP0_RANGE).Value = 512
+	s.GetRegister(base.RAMP1_RANGE).Value = 512
 
 	s.DebugFlags.Reset()
 }

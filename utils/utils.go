@@ -5,15 +5,23 @@ import (
 	"math"
 	"strconv"
 
+	ui "github.com/gizak/termui/v3"
+
 	"github.com/handegar/fv1emu/base"
+	"github.com/handegar/fv1emu/settings"
 )
 
-/**
-  The "msg" support standard Sprintf arguments.
+/*
+*
+
+	The "msg" support standard Sprintf arguments.
 */
 func Assert(mustBeTrue bool, msg string, args ...interface{}) {
 	if !mustBeTrue {
 		fmt.Printf("ERROR: %s\n", fmt.Sprintf(msg, args...))
+		if settings.Debugger {
+			ui.Close()
+		}
 		panic("ASSERT failed")
 	}
 }
