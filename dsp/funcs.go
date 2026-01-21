@@ -147,37 +147,6 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 }
 
 /*
-Will "normalize" the LFO value to a number between [-1.0 .. 0.999]
-*/
-func NormalizeLFOValue(value float64, lfoType int, state *State) float64 {
-	ret := 0.0
-	switch lfoType {
-	case base.LFO_SIN0, base.LFO_COS0, base.LFO_SIN1, base.LFO_COS1:
-		ret = value / float64(32767) // 15 bits
-	case base.LFO_RMP0, base.LFO_RMP1:
-		ret = value / float64(4096)
-	}
-
-	/*
-		utils.Assert(ret < 1.0 && ret >= -1.0,
-			"NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)",
-			value, lfoType, ret)
-	*/
-	if ret > 1.0 || ret < -1.0 {
-		fmt.Printf("NormalizeLFOValue(%f, %d, state) generated value out of range [-1.0, 0.999] (%f)\n",
-			value, lfoType, ret)
-		if ret > 1.0 {
-			ret = 0.99999
-		}
-		if ret < -1.0 {
-			ret = -1.0
-		}
-	}
-
-	return ret
-}
-
-/*
 Return the normalized LFO value
 ie. a value from  <-1.0 .. 1.0>
 

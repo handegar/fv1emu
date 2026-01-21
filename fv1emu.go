@@ -77,6 +77,12 @@ func parseCommandLineParameters() bool {
 	flag.Float64Var(&settings.TrailSeconds, "trail", settings.TrailSeconds,
 		"Additional trail length (seconds)")
 
+	flag.Float64Var(&settings.PreGain, "pregain", settings.PreGain,
+		"Gain for input audio")
+
+	flag.Float64Var(&settings.PostGain, "postgain", settings.PostGain,
+		"Gain for output audio")
+
 	flag.BoolVar(&settings.Debugger, "debug",
 		settings.Debugger,
 		"Enable step-debugger user-interface")
@@ -343,12 +349,17 @@ func main() {
 
 		letsContinue := true
 		for _, sample := range samples {
-			var left float64 = sample[0]
-			var right float64 = sample[1]
-			if isStereo {
+			var left float64 = sample[0] * settings.PreGain
+			var right float64 = sample[1] * settings.PreGain
+			if !isStereo {
 				right = sample[0]
 			}
+
 			outLeft, outRight, cont := processSample(left, right, state, opCodes, sampleNum)
+
+			outLeft = outLeft * settings.PostGain
+			outRight = outRight * settings.PostGain
+
 			updateWavStatistics(sampleNum, outLeft, outRight, &statistics)
 			outSamples = append(outSamples, [2]float64{outLeft, outRight})
 			sampleNum += 1

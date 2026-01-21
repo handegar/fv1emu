@@ -47,6 +47,12 @@ var StopAtSample = -1
 
 var ProgramNumber = 0
 
+// Gain for input audio
+var PreGain = 1.0
+
+// Post processing gain for output audio
+var PostGain = 1.0
+
 // The simulator uses 32bits fixed floats but the FV-1 uses 24bits
 // floats. We will therefore clamp all values to 24 bits. However one
 // might want to detect when a register or DAC reaches it's limits to

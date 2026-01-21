@@ -48,9 +48,7 @@ func CHO_SOF(op base.Op, state *State) error {
 		if (flags & base.CHO_COMPC) != 0 {
 			lfo = 1.0 - lfo
 		}
-		//scaledLFO := ScaleLFOValue(lfo, typ, state)
-		normLFO := NormalizeLFOValue(lfo, typ, state)
-		state.scaleReg.SetFloat64(normLFO)
+		state.scaleReg.SetFloat64(lfo)
 	}
 
 	state.ACC.Mult(state.scaleReg).Add(state.offsetReg)
