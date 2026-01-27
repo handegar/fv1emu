@@ -6,6 +6,10 @@ import (
 	"github.com/handegar/fv1emu/base"
 )
 
+//
+// Multiplies ACC with an LFO value and adds a constant D
+//
+
 func CHO_SOF(op base.Op, state *State) error {
 	D := int32(op.Args[0].RawValue)
 	typ := int(op.Args[1].RawValue)
@@ -25,7 +29,7 @@ func CHO_SOF(op base.Op, state *State) error {
 	if (flags&base.CHO_COMPA) != 0 && isSinLFO(typ) {
 		lfo = -lfo
 	} else if (flags&base.CHO_COMPA) != 0 && !isSinLFO(typ) {
-		lfo = 0.5 - lfo
+		lfo = 1.0 - lfo
 	}
 
 	if (flags & base.CHO_RPTR2) != 0 {
@@ -41,8 +45,12 @@ func CHO_SOF(op base.Op, state *State) error {
 		}
 		xfade := GetXFadeFromLFO(lfo, typ, state)
 		if (flags & base.CHO_COMPC) != 0 {
-			xfade = 0.9999 - xfade
+			xfade = 1.0 - xfade
 		}
+		if (flags & base.CHO_COMPA) != 0 {
+			xfade = -xfade
+		}
+
 		state.scaleReg.SetFloat64(xfade)
 	} else { // =================================  Regular envelope ==
 		if (flags & base.CHO_COMPC) != 0 {

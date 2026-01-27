@@ -18,10 +18,10 @@ import (
 */
 func Assert(mustBeTrue bool, msg string, args ...interface{}) {
 	if !mustBeTrue {
-		fmt.Printf("ERROR: %s\n", fmt.Sprintf(msg, args...))
 		if settings.Debugger {
 			ui.Close()
 		}
+		fmt.Printf("ERROR: %s\n", fmt.Sprintf(msg, args...))
 		panic("ASSERT failed")
 	}
 }
@@ -29,6 +29,9 @@ func Assert(mustBeTrue bool, msg string, args ...interface{}) {
 func StringToQFormat(str string, intbits int, fractionbits int) int32 {
 	num, err := strconv.ParseFloat(str, 64)
 	if err != nil {
+		if settings.Debugger {
+			ui.Close()
+		}
 		panic("Error parsing string to double")
 	}
 	return Float64ToQFormat(num, intbits, fractionbits)

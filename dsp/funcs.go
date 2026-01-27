@@ -116,12 +116,12 @@ func GetLFOValuePlusHalfCycle(lfoType int, lfoValue float64) float64 {
 		panic("Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
 	}
 
-	lfo := lfoValue - 0.5
-	for lfo < 0 {
-		lfo += 0.5
+	lfo := lfoValue + 0.5
+	for lfo > 1.0 {
+		lfo -= 0.5
 	}
 
-	utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO range outside [0 .. 0.5] (was %f)", lfo)
+	utils.Assert(lfo <= 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1] (was %f)", lfo)
 	return lfo
 }
 
@@ -133,17 +133,20 @@ Return a LFO value scaled with the amplitude value specified in the state
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
 	switch lfoType {
+	// FIXME: Why do we have to divide with 16? The amp scaling is way to
+	// high... (20260121 handegar)
 	case base.LFO_SIN0, base.LFO_COS0:
-		amp = float64(state.GetRegister(base.SIN0_RANGE).Value)
+		amp = float64(state.GetRegister(base.SIN0_RANGE).Value) / 16.0
 	case base.LFO_SIN1, base.LFO_COS1:
-		amp = float64(state.GetRegister(base.SIN1_RANGE).Value)
+		amp = float64(state.GetRegister(base.SIN1_RANGE).Value) / 16.0
+
 	case base.LFO_RMP0:
-		amp = float64(state.GetRegister(base.RAMP0_RANGE).Value)
+		amp = float64(state.GetRegister(base.RAMP0_RANGE).ToInt32())
 	case base.LFO_RMP1:
-		amp = float64(state.GetRegister(base.RAMP1_RANGE).Value)
+		amp = float64(state.GetRegister(base.RAMP1_RANGE).ToInt32())
 	}
 
-	return value * amp / 16.0
+	return value * amp
 }
 
 /*
@@ -170,27 +173,9 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 		case base.LFO_RMP1:
 			return state.ramp1LFOReg.ToFloat64()
 		default:
-			panic("Invalid LFO index")
+			utils.Assert(false, "Invalid LFO type: %d", lfoType)
 		}
 	}
-
-	//
-	// A possible optimization could be to roll our own SIN/COS
-	// function like this:
-	//   https://news.ycombinator.com/item?id=30844872
-	//
-	// The hardware sine-function in the FV-1 is not 64-bit as
-	// GOLang's "math.sin()" so there is no need for this kind of
-	// super-precision. A simple 24-bit will be more than enough
-	// and probably too precise for anyone to notice.
-	//
-
-	//
-	// NOTE: One thing I have seen while calibrating against a real FV-1
-	// is that the chip's sine function is quite uneven and more
-	// flattend on the bottom than the top. Maybe I should experiment with
-	// approximations to match the asymetric look on the real deal.
-	//
 
 	switch lfoType {
 	case base.LFO_SIN0: // Sine
@@ -207,16 +192,17 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 		state.sin1LFOReg.SetFloat64(lfo)
 
 	case base.LFO_RMP0: // Ramps
-		lfo = state.Ramp0Osc.GetValue()
-		utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO Ramp0 range outside [0 .. 0.5] (was %f)", lfo)
+		lfo = float64(state.Ramp0Osc.GetValue())
+		utils.Assert(lfo <= 1.0 && lfo >= 0.0, "LFO Ramp0 range outside [0 .. 1.0] (was %f)", lfo)
 		state.ramp0LFOReg.SetFloat64(lfo)
+
 	case base.LFO_RMP1:
-		lfo = state.Ramp1Osc.GetValue()
-		utils.Assert(lfo <= 0.5 && lfo >= 0.0, "LFO Ramp1 range outside [0 .. 0.5] (was %f)", lfo)
+		lfo = float64(state.Ramp1Osc.GetValue())
+		utils.Assert(lfo <= 1.0 && lfo >= 0.0, "LFO Ramp1 range outside [0 .. 1.0] (was %f)", lfo)
 		state.ramp1LFOReg.SetFloat64(lfo)
 
 	default:
-		panic("Unknown LFO type")
+		utils.Assert(false, "Unknown LFO type: %d", lfoType)
 	}
 
 	// Debugging
@@ -240,49 +226,17 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	return lfo
 }
 
-// This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
 // Outputs a [0 .. 1.0] range.
-func GetXFadeFromLFO__OLD(lfo float64, typ int, state *State) float64 {
+func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	if isSinLFO(typ) {
 		panic("Cannot crossfade a SIN LFO")
 	}
 
-	/**
-		   We want the ramp to look like this over the LFO
-	           period (0 .. 0.5):
-
-		                  _______
-		                 /       \
-	  	          ____/         \____
-	           Phase   0   1   2   3   4
-
-		   We'll divide it into 5 phases: Start, rise, rest, sink, end
-	*/
-
-	/*
-	   UPDATE:
-	   It seems to me that the AN-0001 illustration of an xfade envelope is abit incorrect.
-
-	*/
-
-	phaseWidth := (1.0 / 5.0) / 2.0
-	startPhase := phaseWidth / 2.0
-	risePhase := startPhase + phaseWidth
-	restPhase := risePhase + phaseWidth
-	sinkPhase := restPhase + phaseWidth
-
-	x := 10.0
 	val := 0.0
-	if lfo > 0.0 && lfo < startPhase {
-		val = 0.0
-	} else if lfo > startPhase && lfo < risePhase {
-		val = (lfo - startPhase) * x
-	} else if lfo > risePhase && lfo < restPhase {
-		val = 0.9999
-	} else if lfo > restPhase && lfo < sinkPhase {
-		val = 0.9999 - (lfo-restPhase)*x
-	} else { // End phase
-		val = 0.0
+	if lfo < 0.5 {
+		val = lfo * 1.0
+	} else {
+		val = (1 - lfo) * 1.0
 	}
 
 	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
@@ -291,36 +245,12 @@ func GetXFadeFromLFO__OLD(lfo float64, typ int, state *State) float64 {
 	return val
 }
 
-// This expects an lfo-input of [0 .. 1.0], ie. not scaled according to RANGE.
-// Outputs a [0 .. 0.5] ranged "pyramid".
-func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
-	if isSinLFO(typ) {
-		panic("Cannot crossfade a SIN LFO")
-	}
-
-	amp := 0.0
-	if typ == 0 {
-		amp = float64(state.Registers[base.RAMP0_RANGE].ToInt32())
-	} else {
-		amp = float64(state.Registers[base.RAMP1_RANGE].ToInt32())
-	}
-
-	xfade := 0.25 - lfo
-	if lfo > 0.25 {
-		xfade = lfo - 0.25
-	}
-
-	val := (xfade * amp) / 4096.0
-
-	utils.Assert(val < 1.0 && val >= -1.0, "XFadeValue out of range (was %f)", val)
-	return val
-}
-
+// Output normalized
 func GetRampRange(typ int, state *State) float64 {
 	if typ == base.LFO_RMP0 {
-		return float64(state.Registers[base.RAMP0_RANGE].ToInt32())
+		return float64(state.Registers[base.RAMP0_RANGE].ToInt32()) / 4096.0
 	} else if typ == base.LFO_RMP1 {
-		return float64(state.Registers[base.RAMP1_RANGE].ToInt32())
+		return float64(state.Registers[base.RAMP1_RANGE].ToInt32()) / 4096.0
 	}
 
 	panic("Only RAMPx types allowed")

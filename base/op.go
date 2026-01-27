@@ -149,7 +149,7 @@ var LFOTypeNames = []string{
 	"SIN0", "SIN1", "RMP0", "RMP1", "COS0", "COS1",
 }
 
-var RampAmpValuesMap = map[int16]int32{
+var RampAmpValuesMap = map[int16]int8{
 	4096: 0,
 	2048: 1,
 	1024: 2,

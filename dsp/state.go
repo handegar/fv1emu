@@ -9,9 +9,6 @@ import (
 
 const DELAY_RAM_SIZE = 0x8000 // 32k of delay RAM -> 1sec with a 32768Hz clock
 
-const RAMP_START = 0.0
-const RAMP_END = 0.5
-
 type State struct {
 	IP          uint                  // Instruction pointer
 	DelayRAM    [DELAY_RAM_SIZE]int32 // Internal memory

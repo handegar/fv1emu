@@ -6,6 +6,10 @@ import (
 	"github.com/handegar/fv1emu/utils"
 )
 
+//
+// Loads LFO value into ACC
+//
+
 func CHO_RDAL(op base.Op, state *State) error {
 	typ := int(op.Args[1].RawValue)
 	lfoValue := GetLFOValue(typ, state, true)

@@ -1,11 +1,11 @@
 package dsp
 
 import (
-	"errors"
-	"fmt"
+	//"fmt"
 	"math"
 
 	"github.com/handegar/fv1emu/base"
+	//"github.com/handegar/fv1emu/utils"
 )
 
 func isSinLFO(typ int) bool {
@@ -245,12 +245,16 @@ var opTable = map[string]interface{}{
 			}
 
 		case base.RAMP0_RANGE, base.RAMP1_RANGE:
-			amp := int16(4.0 * state.ACC.ToFloat64())
-			reg.SetInt32(int32(amp))
+			amp := state.ACC.ToInt32()
+			reg.SetInt32(amp)
+			//utils.Assert(false, "FIXME: How do we use WRAX with RAMP-range?")
+
+			// FIXME: Do some bit-tricks here to extract the bits determining the
+			// range. Two highest bits? (20260125 handegar)
 			if regNo == base.RAMP0_RANGE {
-				state.Ramp0Osc.SetAmp(amp)
+				state.Ramp0Osc.SetAmp(state.ACC.ToFloat64())
 			} else {
-				state.Ramp1Osc.SetAmp(amp)
+				state.Ramp1Osc.SetAmp(state.ACC.ToFloat64())
 			}
 
 		case base.ADDR_PTR:
@@ -363,19 +367,9 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"WLDR": func(op base.Op, state *State) error {
-		amp := base.RampAmpValues[op.Args[0].RawValue]
-
+		ampIdx := int8(op.Args[0].RawValue)
 		freq := int32(int16(op.Args[2].RawValue)) // Aka. 'rate'
 		typ := op.Args[3].RawValue
-
-		_, valid := base.RampAmpValuesMap[amp]
-		if !valid {
-			state.DebugFlags.SetInvalidRampLFOFlag(typ)
-			amp = 4096
-			msg := fmt.Sprintf("Ramp amplitude value (%d) is not "+
-				"512, 1024, 2048 or 4096", amp)
-			return errors.New(msg)
-		}
 
 		// Cap frequency value
 		if freq < -(1 << 14) { // -16384
@@ -388,14 +382,14 @@ var opTable = map[string]interface{}{
 
 		if typ == 0 { // RAMP0
 			state.Registers[base.RAMP0_RATE].SetInt32(freq)
-			state.Registers[base.RAMP0_RANGE].SetInt32(int32(amp))
+			state.Registers[base.RAMP0_RANGE].SetInt32(int32(base.RampAmpValues[int32(ampIdx)]))
 			state.Ramp0Osc.SetFreq(freq)
-			state.Ramp0Osc.SetAmp(amp)
+			state.Ramp0Osc.SetAmpIdx(ampIdx)
 		} else { // RAMP1
 			state.Registers[base.RAMP1_RATE].SetInt32(freq)
-			state.Registers[base.RAMP1_RANGE].SetInt32(int32(amp))
+			state.Registers[base.RAMP1_RANGE].SetInt32(int32(base.RampAmpValues[int32(ampIdx)]))
 			state.Ramp1Osc.SetFreq(freq)
-			state.Ramp1Osc.SetAmp(amp)
+			state.Ramp1Osc.SetAmpIdx(ampIdx)
 		}
 
 		return nil
@@ -412,6 +406,41 @@ var opTable = map[string]interface{}{
 	"CHO RDA":  CHO_RDA,
 	"CHO SOF":  CHO_SOF,
 	"CHO RDAL": CHO_RDAL,
+}
+
+// Returns the LFO value and resulting scale value depending on the flags.
+func CHO(typ int, flags int, state *State) (float64, float64) {
+	lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
+	scale := lfo
+
+	if isSinLFO(typ) { // Sine ==============================
+		if (flags & base.CHO_COMPC) != 0 {
+			scale = 1.0 - lfo
+		} else {
+			scale = lfo
+		}
+
+		if (flags & base.CHO_COMPA) != 0 {
+			lfo = -lfo
+		}
+
+	} else { // Ramp ========================================
+		if (flags & base.CHO_COMPA) != 0 {
+			lfo = 1.0 - lfo
+		}
+
+		if (flags & base.CHO_NA) != 0 {
+			lfo = GetXFadeFromLFO(lfo, typ, state)
+		}
+
+		if (flags & base.CHO_COMPC) != 0 {
+			scale = 1.0 - lfo
+		} else {
+			scale = lfo
+		}
+	}
+
+	return lfo, scale
 }
 
 func applyOp(opCode base.Op, state *State) error {

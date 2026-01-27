@@ -8,6 +8,34 @@ import (
 	"github.com/handegar/fv1emu/utils"
 )
 
+/**
+  From the datasheet:
+
+  Like the RDA instruction, CHO RDA will read a sample from the delay ram,
+multiply it by a coefficient and add the product to the previous content of
+ACC. However, in contrast to RDA the coefficient is not explicitly embedded
+within the instruction and the effective delay ram address is not solely
+determined by the address parameter. Instead, both values are modulated by the
+selected LFO at run time, for an in depth explanation please consult the FV-1
+datasheet alongside with application note AN-0001. CHO RDA is a very flexible
+and powerful instruction, especially useful for delay line modulation effects
+such as chorus or pitch shifting.
+*/
+
+/*
+Flags:
+
+	 Sine LFO only:
+	    SIN   - Sine output
+	    COS   - Cosine output
+	 Ramp LFO only:
+		  NA    - Use xfade as coeff. Do not add adress offset
+			RPTR2 - Value from 1/2 phase ahead
+	 Both LFO types:
+		  COMPA - Complement the offset address
+		  COMPC - Use (1-LFO) as value
+		  REG   - Save LFO value to a register for reuse
+*/
 func CHO_RDA(op base.Op, state *State) error {
 	/*
 	   LFO related post:
@@ -51,7 +79,7 @@ func CHO_RDA(op base.Op, state *State) error {
 		}
 
 		if (flags & base.CHO_COMPC) != 0 {
-			xfade = 0.9999 - xfade
+			xfade = 1.0 - xfade
 		}
 		state.scaleReg.SetFloat64(xfade)
 		state.offsetReg.SetInt32(int32(addr))
@@ -74,7 +102,7 @@ func CHO_RDA(op base.Op, state *State) error {
 			if isSinLFO(typ) {
 				lfo = (lfo + 1.0) / 2.0 // Shift to [0 .. 1.0]
 			}
-			state.scaleReg.SetFloat64(0.9999 - lfo)
+			state.scaleReg.SetFloat64(1.0 - lfo)
 			lfo = (2*lfo - 1.0)
 		} else {
 			state.scaleReg.SetFloat64(lfo)

@@ -134,6 +134,10 @@ The debugger also has a simple Delay Memory inspector.
 
  - A FV-1 VM running on a STM32: https://github.com/patrickdowling/fv1vm
 
+ - A FV-1 asm to C converter: https://github.com/expertsleepersltd/spn_to_c
+
+ - General pitch-shift tutorial: https://www.youtube.com/watch?v=fJUmmcGKZMI
+
 
 ## Notes
 
