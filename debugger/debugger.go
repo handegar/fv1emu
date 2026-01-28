@@ -51,9 +51,11 @@ func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 	} else if showMemoryMap {
 		renderMemoryMap(state, sampleNum, memoryCursor)
 	} else {
+
 		updateCodeView(opCodes, state)
-		updateStateView(state, sampleNum)
+		updateStateView(sampleNum, state)
 		updateMetaInfoView(opCodes, state)
+		updateRegistersView(state)
 
 		width, height := termui.TerminalDimensions()
 		helpLine := widgets.NewParagraph()
@@ -67,6 +69,7 @@ func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 		helpLine.Border = false
 		helpLine.TextStyle = boxTitleStyle
 		helpLine.SetRect(0, height-1, width, height)
+
 		ui.Render(helpLine)
 	}
 }
@@ -224,13 +227,14 @@ func updateCodeView(opCodes []base.Op, state *dsp.State) {
 	code.Title = fmt.Sprintf("  Instructions (%d) ", len(opCodes))
 	code.TitleStyle = boxTitleStyle
 
-	code.Text = generateCodeListing(opCodes, state, height)
+	code.Text = generateCodeListing(opCodes, state)
 	code.SetRect(0, 0, width, height)
 
 	ui.Render(code)
 }
 
-func generateCodeListing(opCodes []base.Op, state *dsp.State, screenHeight int) string {
+func generateCodeListing(opCodes []base.Op, state *dsp.State) string {
+	_, screenHeight := termui.TerminalDimensions()
 	var lines []string
 	var skpTargets []int
 
@@ -289,8 +293,70 @@ func overflowColored(v float64, min float64, max float64) string {
 	return fmt.Sprintf("[%f](%s)", v, color)
 }
 
+func makeSineString(typ int, state *dsp.State) string {
+	sinRate := int32(0)
+	sinRange := int32(0)
+	if typ == base.LFO_SIN0 {
+		sinRate = state.Registers[base.SIN0_RATE].Value
+		sinRange = state.Registers[base.SIN0_RANGE].Value
+	} else {
+		sinRate = state.Registers[base.SIN1_RATE].Value
+		sinRange = state.Registers[base.SIN0_RANGE].Value
+	}
+
+	sinhz := (float64(sinRate) / 256.0) * 20.0
+	sinrange := float64(sinRange) / 32767.0
+
+	sin := 0.0
+	cos := 0.0
+	if typ == base.LFO_SIN0 {
+		sin = state.Sin0Osc.GetSine()
+		cos = state.Sin0Osc.GetCosine()
+	} else {
+		sin = state.Sin1Osc.GetSine()
+		cos = state.Sin1Osc.GetCosine()
+	}
+
+	lfoStr := fmt.Sprintf(" [SIN%d](fg:yellow)  [Rate:](fg:cyan) %d ", typ, sinRate)
+	lfoStr += fmt.Sprintf("[(%.2f hz)](fg:gray) ", sinhz)
+	lfoStr += fmt.Sprintf("[Amp:](fg:cyan) %d [(%.2f%%)](fg:gray) ", sinRange, sinrange)
+	lfoStr += fmt.Sprintf("[Value:](fg:cyan) %f \n", sin)
+	lfoStr += fmt.Sprintf("       [Cos:](fg:cyan) %.3f, [CmpC:](fg:cyan) %.3f, [CmpA:](fg:cyan) %.3f\n",
+		cos,
+		1.0-sin,
+		-sin)
+
+	return lfoStr
+}
+
+func makeRampString(typ int, state *dsp.State) string {
+	lfo := 0.0
+	regVal := int32(0)
+	if typ == base.LFO_RMP0 {
+		regVal = state.Registers[base.RAMP0_RATE].Value
+		lfo = state.Ramp0Osc.GetValue()
+	} else {
+		regVal = state.Registers[base.RAMP1_RATE].Value
+		lfo = state.Ramp1Osc.GetValue()
+	}
+	rmphz := (float64(regVal) / 32767) * 20.0
+
+	lfoStr := fmt.Sprintf(" [RAMP%d](fg:yellow) [Rate:](fg:cyan) %d ",
+		typ-2, regVal)
+	lfoStr += fmt.Sprintf("[(%.2f hz)](fg:gray) ", rmphz)
+	lfoStr += fmt.Sprintf("[Amp:](fg:cyan) %d ", regVal)
+	lfoStr += fmt.Sprintf("[Value:](fg:cyan) %f\n", lfo)
+
+	lfoStr += fmt.Sprintf("       [NA:](fg:cyan) %.3f, [CmpC:](fg:cyan) %.3f, [CmpA:](fg:cyan) %.3f, [Half:](fg:cyan) %.2f\n",
+		dsp.GetXFadeFromLFO(lfo, typ, state),
+		1.0-lfo,
+		dsp.GetRampRange(typ, state)-lfo,
+		dsp.GetLFOValuePlusHalfCycle(typ, state))
+	return lfoStr
+}
+
 // Prints all values in the state
-func updateStateView(state *dsp.State, sampleNum int) {
+func updateStateView(sampleNum int, state *dsp.State) {
 	twidth, theight := termui.TerminalDimensions()
 	theight = theight - 1 // Save one for the keys line
 
@@ -298,7 +364,7 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	if state.RUN_FLAG {
 		rfInt = 1
 	}
-	stateStr := fmt.Sprintf(" [ACC:](fg:yellow,mod:bold) %s (%d)\n"+
+	stateStr := fmt.Sprintf(" [ACC:](fg:yellow,mod:bold) %s (%d)"+
 		" [PACC:](fg:yellow) %s, [LR:](fg:yellow) %s\n"+
 		" [ADDR_PTR:](fg:yellow) %d, [DelayRAMPtr:](fg:yellow) %d, [RUN:](fg:yellow) %d\n",
 		// FIXME: Is the ACC an S.23 or an S1.14? (20220305 handegar)
@@ -315,37 +381,15 @@ func updateStateView(state *dsp.State, sampleNum int) {
 		overflowColored(state.Registers[base.DACL].ToFloat64(), -1.0, 1.0),
 		overflowColored(state.Registers[base.DACR].ToFloat64(), -1.0, 1.0))
 
-	potStr := fmt.Sprintf(" [POT0](fg:cyan)=%.4f, [POT1](fg:cyan)=%.4f, [POT2](fg:cyan)=%.4f\n",
+	potStr := fmt.Sprintf(" [POT0](fg:cyan): %.4f, [POT1](fg:cyan): %.4f, [POT2](fg:cyan): %.4f\n",
 		state.Registers[base.POT0].ToFloat64(),
 		state.Registers[base.POT1].ToFloat64(),
 		state.Registers[base.POT2].ToFloat64())
 
-	// Sine LFOs (0 .. 512 => 0hz .. 20Hz)
-	sin0hz := (float64(state.Registers[base.SIN0_RATE].Value) / 256.0) * 20.0
-	sin1hz := (float64(state.Registers[base.SIN1_RATE].Value) / 256.0) * 20.0
-	sin0range := float64(state.Registers[base.SIN0_RANGE].Value) / 32767.0
-	sin1range := float64(state.Registers[base.SIN1_RANGE].Value) / 32767.0
-
-	lfoStr := fmt.Sprintf(" [SIN0](fg:yellow)  [Rate:](fg:cyan) %d [\u03B10:](fg:cyan) %f\n"+
-		"       [Amp:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n"+
-		" [SIN1](fg:yellow)  [Rate:](fg:cyan) %d [\u03B11:](fg:cyan) %f\n"+
-		"       [Amp:](fg:cyan) %d (%f) [Hz:](fg:cyan) %.2f\n",
-		state.Registers[base.SIN0_RATE].Value, dsp.GetLFOValue(0, state, false),
-		state.Registers[base.SIN0_RANGE].Value, sin0range, sin0hz,
-		state.Registers[base.SIN1_RATE].Value, dsp.GetLFOValue(1, state, false),
-		state.Registers[base.SIN1_RANGE].Value, sin1range, sin1hz)
-
-	// Ramp LFOs
-	rmp0hz := (float64(state.Registers[base.RAMP0_RATE].Value) / 32767) * 20.0
-	rmp1hz := (float64(state.Registers[base.RAMP1_RATE].Value) / 32767) * 20.0
-	lfoStr += fmt.Sprintf(" [RAMP0](fg:yellow) [Rate:](fg:cyan) %d [\u03940:](fg:cyan) %f\n"+
-		"       [Amp:](fg:cyan) %d [Hz:](fg:cyan) %.2f\n"+
-		" [RAMP1](fg:yellow) [Rate:](fg:cyan) %d [\u03941:](fg:cyan) %f\n"+
-		"       [Amp:](fg:cyan) %d [Hz:](fg:cyan) %.2f",
-		state.Registers[base.RAMP0_RATE].Value, dsp.GetLFOValue(2, state, false),
-		state.Registers[base.RAMP0_RANGE].Value, rmp0hz,
-		state.Registers[base.RAMP1_RATE].Value, dsp.GetLFOValue(3, state, false),
-		state.Registers[base.RAMP1_RANGE].Value, rmp1hz)
+	lfoStr := makeSineString(base.LFO_SIN0, state)
+	lfoStr += makeSineString(base.LFO_SIN1, state)
+	lfoStr += makeRampString(base.LFO_RMP0, state)
+	lfoStr += makeRampString(base.LFO_RMP1, state)
 
 	vPos := 0
 	stateP := widgets.NewParagraph()
@@ -353,8 +397,8 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	stateP.TitleStyle = boxTitleStyle
 	stateP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	stateP.Text = stateStr + ioStr + potStr
-	stateP.SetRect(twidth/2-1, vPos, twidth, vPos+8)
-	vPos += 8
+	stateP.SetRect(twidth/2-1, vPos, twidth, vPos+7)
+	vPos += 7
 
 	lfoP := widgets.NewParagraph()
 	lfoP.Title = "  LFOs  "
@@ -364,7 +408,40 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	lfoP.SetRect(twidth/2-1, vPos, twidth, vPos+10)
 	vPos += 10
 
+	ui.Render(stateP)
+	ui.Render(lfoP)
+
+}
+
+func updateRegistersView(state *dsp.State) {
+	vPos := 17
+	twidth, theight := termui.TerminalDimensions()
+	theight = theight - 1 // Save one for the keys line
+
+	valAsStr := func(registerNr int) string {
+		if showRegistersAsFloats {
+			return fmt.Sprintf("%s", overflowColored(state.Registers[registerNr].ToFloat64(), -1.0, 1.0))
+		} else {
+			return fmt.Sprintf("%d", state.Registers[registerNr].ToInt32())
+		}
+	}
+
 	regStr := ""
+	// Special registers
+	regStr += fmt.Sprintf(" [SIN0_RATE:](fg:cyan): %s  ", valAsStr(0))
+	regStr += fmt.Sprintf(" [SIN0_RANGE:](fg:cyan): %s\n", valAsStr(1))
+	regStr += fmt.Sprintf(" [SIN1_RATE:](fg:cyan): %s  ", valAsStr(2))
+	regStr += fmt.Sprintf(" [SIN1_RANGE:](fg:cyan): %s\n", valAsStr(3))
+	regStr += fmt.Sprintf(" [RMP0_RATE:](fg:cyan): %s  ", valAsStr(4))
+	regStr += fmt.Sprintf(" [RMP0_RANGE:](fg:cyan): %s\n", valAsStr(5))
+	regStr += fmt.Sprintf(" [RMP1_RATE:](fg:cyan): %s  ", valAsStr(6))
+	regStr += fmt.Sprintf(" [RMP1_RANGE:](fg:cyan): %s\n", valAsStr(7))
+
+	regStr += fmt.Sprintf(" [POT0:](fg:cyan): %s  ", valAsStr(16))
+	regStr += fmt.Sprintf(" [POT1:](fg:cyan): %s  ", valAsStr(17))
+	regStr += fmt.Sprintf(" [POT2:](fg:cyan): %s\n", valAsStr(18))
+
+	// General registers
 	for i := 0x20; i <= 0x3f; i += 2 {
 		if showRegistersAsFloats {
 			regStr += fmt.Sprintf(" [Reg%3d:](fg:cyan) %s  ",
@@ -382,17 +459,16 @@ func updateStateView(state *dsp.State, sampleNum int) {
 	regP := widgets.NewParagraph()
 	regP.Title = "  Registers"
 	if showRegistersAsFloats {
-		regP.Title += " (as floats)  "
+		regP.Title += " as floats."
 	} else {
-		regP.Title += " (as integers)  "
+		regP.Title += " as integers."
 	}
+	regP.Title += " Toggle type with 'f'  "
 	regP.TitleStyle = boxTitleStyle
 	regP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	regP.Text = regStr
 	regP.SetRect(twidth/2-1, vPos, twidth, theight-5)
 
-	ui.Render(stateP)
-	ui.Render(lfoP)
 	ui.Render(regP)
 }
 
