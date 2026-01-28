@@ -119,6 +119,8 @@ The debugger also has a simple Delay Memory inspector.
  - Keep track and visualize allocated memory chunks in addition to the
    entire memory-map.
  - Add a reset function in the debugger (or go-to)
+ - Adjust the POT values in the debugger
+ - See ramp NA, COMPA and COMPC values in debugger
 
 ## Links
 
@@ -155,3 +157,51 @@ The debugger also has a simple Delay Memory inspector.
         $ objcopy -I ihex original.hex -O binary newfile.bin
 
   - On linux Ocenaudio is a nice editor with auto-reload
+
+  - List of pitch coefficients:
+    From https://www.diystompboxes.com/smfforum/index.php?topic=131801.0
+
+    EQU DOWN24 -0.375
+	EQU DOWN23 -0.3675671132
+	EQU DOWN22 -0.359692244
+	EQU DOWN21 -0.3513491106
+	EQU DOWN20 -0.3425098688
+	EQU DOWN19 -0.3331450182
+	EQU DOWN18 -0.3232233047
+	EQU DOWN17 -0.3127116154
+	EQU DOWN16 -0.3015748685
+	EQU DOWN15 -0.2897758962
+	EQU DOWN14 -0.2772753205
+	EQU DOWN13 -0.2640314218
+	EQU DOWN12 -0.25
+	EQU DOWN11 -0.235134226
+	EQU DOWN10 -0.219384488
+	EQU DOWN9 -0.202698221
+	EQU DOWN8 -0.185019738
+	EQU DOWN7 -0.166290036
+	EQU DOWN6 -0.146446609
+	EQU DOWN5 -0.125423231
+	EQU DOWN4 -0.103149737
+	EQU DOWN3 -0.079551792
+	EQU DOWN2 -0.054550641
+	EQU DOWN1 -0.028062844
+	EQU ROOT  0
+	EQU UP1	0.029731547
+	EQU UP2	0.061231024
+	EQU UP3	0.094603558
+	EQU UP4	0.129960525
+	EQU UP5	0.167419927
+	EQU UP6	0.207106781
+	EQU UP7	0.249153538
+	EQU UP8	0.293700526
+	EQU UP9	0.340896415
+	EQU UP10 0.390898718
+	EQU UP11 0.443874313
+	EQU UP12 0.5
+	EQU UP13 0.5594630944
+	EQU UP14 0.6224620483
+	EQU UP15 0.689207115
+	EQU UP16 0.7599210499
+	EQU UP17 0.8348398542
+	EQU UP18 0.9142135624
+	EQU UP19 0.9983070769
