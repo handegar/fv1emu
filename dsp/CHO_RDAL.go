@@ -12,7 +12,7 @@ import (
 
 func CHO_RDAL(op base.Op, state *State) error {
 	typ := int(op.Args[1].RawValue)
-	lfoValue := GetLFOValue(typ, state, true)
+	lfoValue := GetLFOValue(typ, state, false) // Read LFO from internal reg
 
 	// NOTE: The debug-flags only apply to SIN0/RMP0, *not* SIN1/RMP1
 	if settings.CHO_RDAL_is_NA && !isSinLFO(typ) && typ == base.LFO_RMP0 {
@@ -29,13 +29,13 @@ func CHO_RDAL(op base.Op, state *State) error {
 
 	} else if settings.CHO_RDAL_is_RPTR2 && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 		// Used when debugging the RPTR2 envelope
-		lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, lfoValue)
+		lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, state)
 		utils.Assert(lfoValue != lfoPlusHalf, "Internal RPTR2 error! (%f == %f)", lfoValue, lfoPlusHalf)
 		state.ACC.SetFloat64(lfoPlusHalf)
 
 	} else if settings.CHO_RDAL_is_RPTR2_COMPC && !isSinLFO(typ) && typ == base.LFO_RMP0 {
 		// Used when debugging the RPTR2 envelope
-		lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, lfoValue)
+		lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, state)
 		utils.Assert(lfoValue != lfoPlusHalf, "Internal RPTR2 error!")
 		lfoPlusHalf = 1.0 - lfoPlusHalf
 		state.ACC.SetFloat64(lfoPlusHalf)

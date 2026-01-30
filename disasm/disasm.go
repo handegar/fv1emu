@@ -22,6 +22,7 @@ func PrintCodeListing(opCodes []base.Op) {
 		for _, p := range skpTargets {
 			if p == (pos - 1) {
 				fmt.Printf("addr_%d:\n", pos)
+				break
 			}
 		}
 
@@ -185,6 +186,10 @@ func SKP_ToString(op base.Op, ip int) string {
 		if (flags & (1 << i)) != 0 {
 			cmds = append(cmds, base.SkpFlagSymbols[flags&(1<<i)])
 		}
+	}
+
+	if len(cmds) == 0 {
+		cmds = append(cmds, "0")
 	}
 
 	return fmt.Sprintf("SKP   %s, addr_%d",

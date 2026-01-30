@@ -45,12 +45,19 @@ var opTable = map[string]interface{}{
 		// C*exp(ACC) + D
 		state.PACC.Copy(state.ACC)
 		acc := state.ACC.ToFloat64()
+		
 		if acc >= 0 {
 			state.ACC.SetToMax24Bit().Mult(state.workReg1_14).Add(state.workReg0_10)
 		} else {
 			acc = acc * 16.0
 			state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
 		}
+		
+
+		/*
+		acc = math.Exp2(acc)*state.workReg1_14.ToFloat64() + state.workReg0_10.ToFloat64()
+		state.ACC.SetFloat64(min(acc, 1.0))
+		*/ 
 		return nil
 	},
 	"SOF": func(op base.Op, state *State) error {
@@ -108,7 +115,10 @@ var opTable = map[string]interface{}{
 		if (flags&base.SKP_NEG) > 0 && state.ACC.IsSigned() { // NEG
 			jmp = true
 		}
-
+		if (flags == 0) { // No flags => Always jump
+			jmp = true
+		}
+		
 		if jmp {
 			state.IP += uint(N)
 		}
@@ -218,7 +228,7 @@ var opTable = map[string]interface{}{
 			if accAsInt < 0 { // Don't allow a negative rate/freq
 				accAsInt = -accAsInt
 			}
-			rate := accAsInt >> (24 - 9 - 1)
+			rate := accAsInt >> (24 - 9 - 1) // Reduce to 0..511
 			reg.SetInt32(rate)
 			if regNo == base.SIN0_RATE {
 				state.Sin0Osc.SetFreq(rate)
@@ -227,7 +237,7 @@ var opTable = map[string]interface{}{
 			}
 
 		case base.SIN0_RANGE, base.SIN1_RANGE:
-			amp := accAsInt >> (24 - 15 - 1)
+			amp := accAsInt >> (24 - 15 - 1) // Reduce to 0..32767
 			reg.SetInt32(amp)
 			if regNo == base.SIN0_RATE {
 				state.Sin0Osc.SetAmp(amp)
@@ -236,8 +246,9 @@ var opTable = map[string]interface{}{
 			}
 
 		case base.RAMP0_RATE, base.RAMP1_RATE:
-			freq := int32(int16(accAsInt >> (24 - 16)))
+			freq := int32(int16(accAsInt >> (24 - 16))) // Reduce to -16384..32767
 			reg.SetInt32(freq)
+
 			if regNo == base.RAMP0_RATE {
 				state.Ramp0Osc.SetFreq(freq)
 			} else {
@@ -245,16 +256,13 @@ var opTable = map[string]interface{}{
 			}
 
 		case base.RAMP0_RANGE, base.RAMP1_RANGE:
-			amp := state.ACC.ToInt32()
-			reg.SetInt32(amp)
-			//utils.Assert(false, "FIXME: How do we use WRAX with RAMP-range?")
-
-			// FIXME: Do some bit-tricks here to extract the bits determining the
-			// range. Two highest bits? (20260125 handegar)
+			ampidx := state.ACC.ToInt32() >> 21 // Reduce to 0, 1, 2 or 3
+			reg.SetInt32(int32(base.RampAmpValues[3-ampidx]))
+										
 			if regNo == base.RAMP0_RANGE {
-				state.Ramp0Osc.SetAmp(state.ACC.ToFloat64())
+				state.Ramp0Osc.SetAmpIdx(int8(ampidx))
 			} else {
-				state.Ramp1Osc.SetAmp(state.ACC.ToFloat64())
+				state.Ramp1Osc.SetAmpIdx(int8(ampidx))
 			}
 
 		case base.ADDR_PTR:
@@ -406,41 +414,6 @@ var opTable = map[string]interface{}{
 	"CHO RDA":  CHO_RDA,
 	"CHO SOF":  CHO_SOF,
 	"CHO RDAL": CHO_RDAL,
-}
-
-// Returns the LFO value and resulting scale value depending on the flags.
-func CHO(typ int, flags int, state *State) (float64, float64) {
-	lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) != 0)
-	scale := lfo
-
-	if isSinLFO(typ) { // Sine ==============================
-		if (flags & base.CHO_COMPC) != 0 {
-			scale = 1.0 - lfo
-		} else {
-			scale = lfo
-		}
-
-		if (flags & base.CHO_COMPA) != 0 {
-			lfo = -lfo
-		}
-
-	} else { // Ramp ========================================
-		if (flags & base.CHO_COMPA) != 0 {
-			lfo = 1.0 - lfo
-		}
-
-		if (flags & base.CHO_NA) != 0 {
-			lfo = GetXFadeFromLFO(lfo, typ, state)
-		}
-
-		if (flags & base.CHO_COMPC) != 0 {
-			scale = 1.0 - lfo
-		} else {
-			scale = lfo
-		}
-	}
-
-	return lfo, scale
 }
 
 func applyOp(opCode base.Op, state *State) error {

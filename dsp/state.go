@@ -25,18 +25,24 @@ type State struct {
 
 	DebugFlags *DebugFlags // Contains misc debug/error flags which will be set @ runtime
 
-	// Holdes
-	sin0LFOReg  *Register // Holds the frozen sine LFO value
-	sin1LFOReg  *Register // Holds the frozen sine LFO value
-	ramp0LFOReg *Register // Holds the frozen ramp LFO value
-	ramp1LFOReg *Register // Holds the frozen ramp LFO value
+	Registers RegisterBank // All 64 registers
 
-	Registers RegisterBank
+	//
+	// Internal registers
+	//
 
-	workRegA  *Register // Register used interally for certain operations
-	workRegB  *Register // Register used interally for certain operations
-	scaleReg  *Register // Register used interally for certain operations
-	offsetReg *Register // Register used interally for certain operations
+	// Holds the frozen LFO values when using the 'REG' flag with the CHO
+	// instruction
+	sin0LFOReg  *Register
+	sin1LFOReg  *Register
+	ramp0LFOReg *Register
+	ramp1LFOReg *Register
+
+	// Register used interally for certain operations
+	workRegA  *Register
+	workRegB  *Register
+	scaleReg  *Register
+	offsetReg *Register
 
 	workReg0_23 *Register // S.23
 	workReg0_10 *Register // S.10
@@ -53,6 +59,12 @@ func (s *State) UpdateSineLFOs() {
 func (s *State) UpdateRampLFOs() {
 	s.Ramp0Osc.Update()
 	s.Ramp1Osc.Update()
+}
+
+// Returns the LFO values stored by the CHO+'REG' flag
+func (s *State) GetLFORegisterValues() (float64, float64, float64, float64) {
+	return s.sin0LFOReg.ToFloat64(), s.sin1LFOReg.ToFloat64(),
+		s.ramp0LFOReg.ToFloat64(), s.ramp1LFOReg.ToFloat64()
 }
 
 type RegisterBank map[int]*Register
@@ -130,18 +142,21 @@ func (s *State) Duplicate() *State {
 func (s *State) Reset() {
 	s.IP = 0
 	s.RUN_FLAG = false
+	s.DelayRAMPtr = 0
+
 	s.ACC = NewRegister(0)
 	s.PACC = NewRegister(0)
 	s.LR = NewRegister(0)
+
+	s.Sin0Osc.value = 0
+	s.Sin1Osc.value = 0
+	s.Ramp0Osc.Reset()
+	s.Ramp1Osc.Reset()
 
 	s.sin0LFOReg = NewRegister(0)
 	s.sin1LFOReg = NewRegister(0)
 	s.ramp0LFOReg = NewRegister(0)
 	s.ramp1LFOReg = NewRegister(0)
-	s.Sin0Osc.value = 0
-	s.Sin1Osc.value = 0
-	s.Ramp0Osc.Reset()
-	s.Ramp1Osc.Reset()
 
 	s.workRegA = NewRegister(0)
 	s.workRegB = NewRegister(0)
@@ -154,16 +169,12 @@ func (s *State) Reset() {
 	s.workReg1_9 = NewRegisterWithIntsAndFracs(0, 1, 9)
 	s.workReg4_6 = NewRegisterWithIntsAndFracs(0, 4, 6)
 
-	s.DelayRAMPtr = 0
-
 	s.Registers = make(map[int]*Register)
 	for i := 0; i < 64; i++ {
-		if (i >= 8 && i <= 15) || i == 19 || (i >= 25 && i <= 31) {
-			continue // Unused registers
-		}
 		s.Registers[i] = NewRegister(0) // All registers are S.23 as default
 	}
 
+	// Set default register values
 	s.GetRegister(base.POT0).SetClampedFloat64(settings.Pot0Value) // POT0, (16) Pot 0 input register
 	s.GetRegister(base.POT1).SetClampedFloat64(settings.Pot1Value) // POT1, (17) Pot 1 input register
 	s.GetRegister(base.POT2).SetClampedFloat64(settings.Pot2Value) // POT2, (18) Pot 2 input register

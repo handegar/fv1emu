@@ -92,6 +92,7 @@ func (r *RampOscillator) Update() {
 }
 
 func (r *RampOscillator) SetFreq(freq int32) {
+	utils.Assert(freq < 32769 && freq > -16384, "Ramp freq out of range: %d", freq)
 	r.freq = freq
 }
 

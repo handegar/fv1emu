@@ -36,6 +36,7 @@ Flags:
 		  COMPC - Use (1-LFO) as value
 		  REG   - Save LFO value to a register for reuse
 */
+
 func CHO_RDA(op base.Op, state *State) error {
 	/*
 	   LFO related post:
@@ -59,13 +60,15 @@ func CHO_RDA(op base.Op, state *State) error {
 		if isSinLFO(typ) {
 			return errors.New("Cannot use RPTR2 with SIN LFOs")
 		}
-		lfo = GetLFOValuePlusHalfCycle(typ, lfo)
+		lfo = GetLFOValuePlusHalfCycle(typ, state)
 	}
 
-	if (flags&base.CHO_COMPA) != 0 && isSinLFO(typ) {
-		lfo = -lfo
-	} else if (flags&base.CHO_COMPA) != 0 && !isSinLFO(typ) {
-		lfo = (GetRampRange(typ, state) / 1.0) - lfo
+	if flags&base.CHO_COMPA != 0 {
+		if isSinLFO(typ) {
+			lfo = -lfo
+		} else {
+			lfo = GetRampRange(typ, state) - lfo
+		}
 	}
 
 	if (flags & base.CHO_NA) != 0 { // === Shall we do the X-FADE? =====
@@ -74,10 +77,6 @@ func CHO_RDA(op base.Op, state *State) error {
 		}
 
 		xfade := GetXFadeFromLFO(lfo, typ, state)
-		if (flags & base.CHO_COMPA) != 0 {
-			xfade = -xfade
-		}
-
 		if (flags & base.CHO_COMPC) != 0 {
 			xfade = 1.0 - xfade
 		}
@@ -92,10 +91,13 @@ func CHO_RDA(op base.Op, state *State) error {
 		idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 		if err != nil {
 			fmt.Printf("ERROR: %s\n", err)
+			utils.Assert(false, "Mem access out of bounds")
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 		}
 
-		state.workRegA.SetWithIntsAndFracs(state.DelayRAM[idx], 0, 23)
+		delayValue := state.DelayRAM[idx]
+		state.LR.SetWithIntsAndFracs(delayValue, 0, 23)
+		state.workRegA.SetWithIntsAndFracs(delayValue, 0, 23)
 
 		if (flags & base.CHO_COMPC) != 0 {
 			// FIXME: Is this shift needed? (20220923 handegar)

@@ -533,7 +533,7 @@ func Test_LFOOps(t *testing.T) {
 			t.Fatalf("Expected Ramp0.Freq=0x%x, got 0x%x",
 				op.Args[2].RawValue, state.GetRegister(base.RAMP0_RATE).Value)
 		}
-		if state.GetRegister(base.RAMP0_RANGE).Value != base.RampAmpValues[int(op.Args[0].RawValue)] {
+		if state.GetRegister(base.RAMP0_RANGE).Value != int32(base.RampAmpValues[int(op.Args[0].RawValue)]) {
 			t.Fatalf("Expected Ramp0.Amplitude=%d, got %d",
 				base.RampAmpValues[int(op.Args[0].RawValue)],
 				state.GetRegister(base.RAMP0_RANGE).Value)
@@ -549,7 +549,7 @@ func Test_LFOOps(t *testing.T) {
 			t.Fatalf("Expected Ramp1.Freq=0x%x, got 0x%x",
 				op.Args[2].RawValue, state.GetRegister(base.RAMP1_RATE).Value)
 		}
-		if state.GetRegister(base.RAMP1_RANGE).Value != base.RampAmpValues[op.Args[0].RawValue] {
+		if state.GetRegister(base.RAMP1_RANGE).Value != int32(base.RampAmpValues[op.Args[0].RawValue]) {
 			t.Fatalf("Expected Ramp1.Amplitude=%d, got %d",
 				base.RampAmpValues[int(op.Args[0].RawValue)],
 				state.GetRegister(base.RAMP1_RANGE).Value)
@@ -558,8 +558,8 @@ func Test_LFOOps(t *testing.T) {
 
 	t.Run("JAM", func(t *testing.T) {
 		state := NewState()
-		state.Ramp0State.Value = 123.0
-		state.Ramp1State.Value = 234.0
+		state.Ramp0Osc.value = 123.0
+		state.Ramp1Osc.value = 234.0
 
 		op := base.Ops[0x13]
 		op.Args[0].RawValue = 0x0
@@ -567,14 +567,14 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[2].RawValue = 0x0
 
 		applyOp(op, state)
-		if float2Compare(float32(state.Ramp0State.Value), float32(0.0)) {
-			t.Errorf("Expected Ramo0State to be 0.0, got %f\n", state.Ramp0State.Value)
+		if float2Compare(float32(state.Ramp0Osc.value), float32(0.0)) {
+			t.Errorf("Expected Ramo0State to be 0.0, got %f\n", state.Ramp0Osc.value)
 		}
 
 		op.Args[1].RawValue = 0x1
 		applyOp(op, state)
-		if float2Compare(float32(state.Ramp1State.Value), float32(0.0)) {
-			t.Errorf("Expected Ramp1State to be 0.0, got %f\n", state.Ramp1State.Value)
+		if float2Compare(float32(state.Ramp1Osc.value), float32(0.0)) {
+			t.Errorf("Expected Ramp1State to be 0.0, got %f\n", state.Ramp1Osc.value)
 		}
 	})
 
@@ -603,7 +603,7 @@ func Test_LFOOps(t *testing.T) {
 
 		state.GetRegister(base.SIN0_RANGE).Value = 2
 		state.ACC.Clear()
-		state.Sin0State.Angle = 3.1415 / 2.0
+		state.Sin0Osc.value = 3.1415 / 2.0
 		applyOp(op, state)
 		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(0, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
@@ -613,7 +613,7 @@ func Test_LFOOps(t *testing.T) {
 
 		state.ACC.Clear()
 		op.Args[1].RawValue = 0x01 // Type (SIN1)
-		state.Sin1State.Angle = 0.0
+		state.Sin1Osc.value = 0.0
 		applyOp(op, state)
 		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
@@ -623,7 +623,7 @@ func Test_LFOOps(t *testing.T) {
 
 		state.GetRegister(base.SIN0_RANGE).SetFloat64(2.0)
 		state.ACC.Clear()
-		state.Sin1State.Angle = 3.1415 / 2.0
+		state.Sin1Osc.value = 3.1415 / 2.0
 		applyOp(op, state)
 		if state.ACC.Value != state.DelayRAM[1000+int(GetLFOValue(1, state, false))] {
 			t.Errorf("Expected ACC to be 0x%x, got 0x%x\n",
@@ -662,7 +662,7 @@ func Test_LFOOps(t *testing.T) {
 		op.Args[3].RawValue = 0x2
 		op.Args[4].RawValue = 0x3
 
-		state.Sin0State.Angle = 3.14 / 2.0
+		state.Sin0Osc.value = 3.14 / 2.0
 		state.GetRegister(base.SIN0_RANGE).Value = 1
 		applyOp(op, state)
 
@@ -676,7 +676,7 @@ func Test_LFOOps(t *testing.T) {
 
 		// SIN1
 		op.Args[1].RawValue = 0x1
-		state.Sin1State.Angle = 3.14 / 2.0
+		state.Sin1Osc.value = 3.14 / 2.0
 		state.GetRegister(base.SIN1_RANGE).Value = 1
 		applyOp(op, state)
 
@@ -690,7 +690,7 @@ func Test_LFOOps(t *testing.T) {
 
 		// RMP0
 		op.Args[1].RawValue = 0x2
-		state.Ramp0State.Value = 0.5
+		state.Ramp0Osc.value = 0.5
 		state.GetRegister(base.RAMP0_RANGE).Value = 2
 		applyOp(op, state)
 
@@ -704,7 +704,7 @@ func Test_LFOOps(t *testing.T) {
 
 		// RMP1
 		op.Args[1].RawValue = 0x3
-		state.Ramp1State.Value = 0.5
+		state.Ramp1Osc.value = 0.5
 		state.GetRegister(base.RAMP1_RANGE).Value = 2
 		applyOp(op, state)
 

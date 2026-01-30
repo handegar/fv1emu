@@ -111,14 +111,12 @@ NB: This is only valid for RAMP LFOs.
 // using some bitmask'ing on integers instead.
 // (20220917 handegar)
 */
-func GetLFOValuePlusHalfCycle(lfoType int, lfoValue float64) float64 {
-	if isSinLFO(lfoType) {
-		panic("Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
-	}
+func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
+	utils.Assert(!isSinLFO(lfoType), "Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
 
-	lfo := lfoValue + 0.5
+	lfo := GetLFOValue(lfoType, state, false) + 0.5
 	for lfo > 1.0 {
-		lfo -= 0.5
+		lfo -= 1.0
 	}
 
 	utils.Assert(lfo <= 1.0 && lfo >= 0.0, "LFO range outside [0 .. 1] (was %f)", lfo)
@@ -228,15 +226,28 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 
 // Outputs a [0 .. 1.0] range.
 func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
-	if isSinLFO(typ) {
-		panic("Cannot crossfade a SIN LFO")
-	}
+	utils.Assert(!isSinLFO(typ), "Cannot crossfade a SIN LFO")
 
 	val := 0.0
-	if lfo < 0.5 {
-		val = lfo * 1.0
+	if true {
+		// Symetric saw-tooth with flat top. Each part is 1/3 of a cycle
+		if lfo < 1.0/3.0 {
+			val = lfo * 3.0
+		} else if lfo < 2.0/3.0 {
+			val = 1.0
+		} else {
+			val = (1.0 - lfo) * 3.0
+		}
+
+		val = val
+
 	} else {
-		val = (1 - lfo) * 1.0
+		// Simple symetric sawtooth
+		if lfo < 0.5 {
+			val = lfo * 2.0
+		} else {
+			val = (1 - lfo) * 2.0
+		}
 	}
 
 	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
@@ -245,15 +256,16 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	return val
 }
 
-// Output normalized
+// Output normalized, <0 .. 1.0>
 func GetRampRange(typ int, state *State) float64 {
+	utils.Assert(typ == base.LFO_RMP0 || typ == base.LFO_RMP1, "Only RAMP oscillator allowed")
 	if typ == base.LFO_RMP0 {
 		return float64(state.Registers[base.RAMP0_RANGE].ToInt32()) / 4096.0
 	} else if typ == base.LFO_RMP1 {
 		return float64(state.Registers[base.RAMP1_RANGE].ToInt32()) / 4096.0
 	}
 
-	panic("Only RAMPx types allowed")
+	return 0.0
 }
 
 // Ensure the DelayRAM index is within bounds
