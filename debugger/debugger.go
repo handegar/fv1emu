@@ -31,46 +31,64 @@ func GetRegisteredState(ip uint) (*dsp.State, bool) {
 }
 
 func generateCodeListing(opCodes []base.Op, state *dsp.State) string {
-	screenHeight := uiState.terminalHeight
 	var lines []string
 	var skpTargets []int
 
-	lineNo := 0
-	if int(state.IP) > (screenHeight / 2) {
-		lineNo = int(state.IP) - (screenHeight / 2)
-	}
-
-	for i := 0; i < screenHeight; i++ {
-		if (lineNo + i) > (len(opCodes) - 1) {
-			break
+	currentLine := 0
+	
+	// Register all SKPs
+	for i := 0; i < len(opCodes); i++ {
+		op := opCodes[i]
+		if op.Name == "SKP" {
+			skpTargets = append(skpTargets, i+int(op.Args[1].RawValue))
 		}
-
-		op := opCodes[lineNo+i]
+	}
+	
+	for i := 0; i < len(opCodes); i++ {
+		op := opCodes[i]
+		
 		codeColor := "fg:white"
-		numColor := "fg:yellow"
-		if (lineNo + i) == int(state.IP) { // Cursor line?
+		numColor := "fg:gray"
+		skpColor := "fg:cyan"
+		if i == int(state.IP) { // Cursor line?
 			codeColor = "fg:red,bg:white,mod:bold"
 			numColor = "fg:black,bg:white,mod:bold"
+			skpColor = "fg:cyan,bg:white,mod:bold"
+			currentLine = i
 		}
 
 		if op.Name == "SKP" {
-			skpTargets = append(skpTargets, lineNo+i+int(op.Args[1].RawValue))
+			skpTargets = append(skpTargets, i+int(op.Args[1].RawValue))
 		}
 
+		lineNoLabel := fmt.Sprintf("[ %3d](%s)", i, numColor)
+		
+		skipLabel := "    "
+		hasSkipLabel := false
 		for _, p := range skpTargets {
-			if p == ((lineNo + i) - 1) {
-				skpLine := fmt.Sprintf("[addr_%d:](fg:cyan)", lineNo+i)
-				lines = append(lines, skpLine)
+			if p == (i - 1) {
+				skipLabel = fmt.Sprintf("\n[L%2d:](%s)", i, skpColor)				
+				hasSkipLabel = true
 				break
 			}
 		}
 
-		str := fmt.Sprintf("[%3d](%s)[  %s  ](%s)",
-			lineNo+i, numColor,
+		label := lineNoLabel
+		if hasSkipLabel {
+			label = skipLabel
+		}
+		
+		str := fmt.Sprintf("%s[ %s  ](%s)",
+			label,
 			disasm.OpCodeToString(op, i, false), codeColor)
 		lines = append(lines, str)
-
 	}
+
+	threshold := uiState.terminalHeight - 8
+	if currentLine > threshold {
+		return strings.Join(lines[threshold:], "\n")		
+	}
+	
 	return strings.Join(lines, "\n")
 }
 

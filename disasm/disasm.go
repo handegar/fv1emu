@@ -21,7 +21,7 @@ func PrintCodeListing(opCodes []base.Op) {
 		// Is current "pos" registered in 'skpTargets'?
 		for _, p := range skpTargets {
 			if p == (pos - 1) {
-				fmt.Printf("addr_%d:\n", pos)
+				fmt.Printf("L%d:\n", pos)
 				break
 			}
 		}
@@ -192,7 +192,7 @@ func SKP_ToString(op base.Op, ip int) string {
 		cmds = append(cmds, "0")
 	}
 
-	return fmt.Sprintf("SKP   %s, addr_%d",
+	return fmt.Sprintf("SKP   %s, L%d",
 		strings.Join(cmds, "|"),
 		ip+int(op.Args[1].RawValue)+1)
 }
