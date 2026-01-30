@@ -300,15 +300,18 @@ func makeRampString(typ int, state *dsp.State) string {
 	lfo := 0.0
 	reg := 0.0
 	rateRegValue := int32(0)
+	ampRegValue := int32(0)
 
 	_, _, ramp0Reg, ramp1Reg := state.GetLFORegisterValues()
 
 	if typ == base.LFO_RMP0 {
 		rateRegValue = state.Registers[base.RAMP0_RATE].Value
+		ampRegValue = state.Registers[base.RAMP0_RANGE].Value
 		lfo = state.Ramp0Osc.GetValue()
 		reg = ramp0Reg
 	} else {
 		rateRegValue = state.Registers[base.RAMP1_RATE].Value
+		ampRegValue = state.Registers[base.RAMP1_RANGE].Value
 		lfo = state.Ramp1Osc.GetValue()
 		reg = ramp1Reg
 	}
@@ -317,7 +320,7 @@ func makeRampString(typ int, state *dsp.State) string {
 	lfoStr := fmt.Sprintf(" [RAMP%d](fg:yellow) [Rate:](fg:cyan) %d ",
 		typ-2, rateRegValue)
 	lfoStr += fmt.Sprintf("[(%.2f hz)](fg:gray)   ", rmphz)
-	lfoStr += fmt.Sprintf("[Amp:](fg:cyan) %d   ", rateRegValue)
+	lfoStr += fmt.Sprintf("[Amp:](fg:cyan) %d   ", ampRegValue)
 	lfoStr += fmt.Sprintf("[Value:](fg:cyan) %f\n", lfo)
 
 	lfoStr += fmt.Sprintf("       [NA:](fg:cyan) %.3f   [CmpC:](fg:cyan) %.3f   [CmpA:](fg:cyan) %.3f   [Half:](fg:cyan) %.2f   [Reg:](fg:cyan) %.2f\n",
@@ -355,7 +358,7 @@ func updateStateView(sampleNum int, state *dsp.State) {
 		overflowColored(state.Registers[base.DACL].ToFloat64(), -1.0, 1.0),
 		overflowColored(state.Registers[base.DACR].ToFloat64(), -1.0, 1.0))
 
-	potStr := fmt.Sprintf(" [POT0](fg:cyan): %.2f   [POT1](fg:cyan): %.2f   [POT2](fg:cyan): %.2f\n",
+	potStr := fmt.Sprintf(" [POT0:](fg:cyan) %.2f   [POT1:](fg:cyan) %.2f   [POT2:](fg:cyan) %.2f\n",
 		state.Registers[base.POT0].ToFloat64(),
 		state.Registers[base.POT1].ToFloat64(),
 		state.Registers[base.POT2].ToFloat64())
@@ -403,17 +406,17 @@ func updateRegistersView(state *dsp.State) {
 
 	regStr := ""
 	// Special registers
-	regStr += fmt.Sprintf(" [SIN0_RATE:](fg:cyan): %s  ", valAsStr(base.SIN0_RATE))
-	regStr += fmt.Sprintf(" [SIN0_RANGE:](fg:cyan): %s\n", valAsStr(base.SIN0_RANGE))
-	regStr += fmt.Sprintf(" [SIN1_RATE:](fg:cyan): %s  ", valAsStr(base.SIN1_RATE))
-	regStr += fmt.Sprintf(" [SIN1_RANGE:](fg:cyan): %s\n", valAsStr(base.SIN1_RANGE))
+	regStr += fmt.Sprintf(" [SIN0_RATE:](fg:cyan) %s  ", valAsStr(base.SIN0_RATE))
+	regStr += fmt.Sprintf(" [SIN0_RANGE:](fg:cyan) %s\n", valAsStr(base.SIN0_RANGE))
+	regStr += fmt.Sprintf(" [SIN1_RATE:](fg:cyan) %s  ", valAsStr(base.SIN1_RATE))
+	regStr += fmt.Sprintf(" [SIN1_RANGE:](fg:cyan) %s\n", valAsStr(base.SIN1_RANGE))
 
 	regStr += "\n"
 
-	regStr += fmt.Sprintf(" [RMP0_RATE:](fg:cyan): %s  ", valAsStr(base.RAMP0_RATE))
-	regStr += fmt.Sprintf(" [RMP0_RANGE:](fg:cyan): %s\n", valAsStr(base.RAMP0_RANGE))
-	regStr += fmt.Sprintf(" [RMP1_RATE:](fg:cyan): %s  ", valAsStr(base.RAMP1_RATE))
-	regStr += fmt.Sprintf(" [RMP1_RANGE:](fg:cyan): %s\n", valAsStr(base.RAMP1_RANGE))
+	regStr += fmt.Sprintf(" [RMP0_RATE:](fg:cyan) %s  ", valAsStr(base.RAMP0_RATE))
+	regStr += fmt.Sprintf(" [RMP0_RANGE:](fg:cyan) %s\n", valAsStr(base.RAMP0_RANGE))
+	regStr += fmt.Sprintf(" [RMP1_RATE:](fg:cyan) %s  ", valAsStr(base.RAMP1_RATE))
+	regStr += fmt.Sprintf(" [RMP1_RANGE:](fg:cyan) %s\n", valAsStr(base.RAMP1_RANGE))
 
 	regStr += "\n"
 

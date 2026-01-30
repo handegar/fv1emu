@@ -67,7 +67,7 @@ func generateCodeListing(opCodes []base.Op, state *dsp.State) string {
 
 		str := fmt.Sprintf("[%3d](%s)[  %s  ](%s)",
 			lineNo+i, numColor,
-			disasm.OpCodeToString(op, lineNo, false), codeColor)
+			disasm.OpCodeToString(op, i, false), codeColor)
 		lines = append(lines, str)
 
 	}
