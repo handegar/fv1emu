@@ -78,7 +78,7 @@ func generateCodeListing(opCodes []base.Op, state *dsp.State) string {
 			label = skipLabel
 		}
 		
-		str := fmt.Sprintf("%s[ %s  ](%s)",
+		str := fmt.Sprintf("%s[  %s  ](%s)",
 			label,
 			disasm.OpCodeToString(op, i, false), codeColor)
 		lines = append(lines, str)

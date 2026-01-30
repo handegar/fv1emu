@@ -124,7 +124,7 @@ func renderMainScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 	width, height := termui.TerminalDimensions()
 	uiState.terminalHeight = height
 	uiState.terminalWidth = width
-	uiState.centerLine = max(width / 2, 60)
+	uiState.centerLine = max(width / 2, 53)
 
 	updateCodeView(opCodes, state)
 	updateStateView(sampleNum, state)
@@ -320,7 +320,7 @@ func makeRampString(typ int, state *dsp.State) string {
 	lfoStr := fmt.Sprintf(" [RAMP%d](fg:yellow) [Rate:](fg:cyan) %d ",
 		typ-2, rateRegValue)
 	lfoStr += fmt.Sprintf("[(%.2f hz)](fg:gray)   ", rmphz)
-	lfoStr += fmt.Sprintf("[Amp:](fg:cyan) %d   ", ampRegValue)
+	lfoStr += fmt.Sprintf("[Range:](fg:cyan) %d   ", ampRegValue)
 	lfoStr += fmt.Sprintf("[Value:](fg:cyan) %f\n", lfo)
 
 	lfoStr += fmt.Sprintf("       [NA:](fg:cyan) %.3f   [CmpC:](fg:cyan) %.3f   [CmpA:](fg:cyan) %.3f   [Half:](fg:cyan) %.2f   [Reg:](fg:cyan) %.2f\n",
