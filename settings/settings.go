@@ -65,14 +65,5 @@ var Disable24BitsClamping = false
 // Default filename will be 'reg-<NUM>.csv'. Ignored if value is < 0.
 var WriteRegisterToCSV = -1
 
-// Debug stuff -- might disapear
-var CHO_RDAL_is_NA = false
-var CHO_RDAL_is_NA_COMPC = false
-var CHO_RDAL_is_RPTR2 = false
-var CHO_RDAL_is_RPTR2_COMPC = false
-var CHO_RDAL_is_COMPA = false
-var CHO_RDAL_is_COMPC = false
-var CHO_RDAL_is_COS = false
-
 // Output filename for the CPU profiler
 var ProfilerFilename = ""

@@ -80,8 +80,8 @@ var opTable = map[string]interface{}{
 		return nil
 	},
 	"OR": func(op base.Op, state *State) error {
-		// FIXME: Shall we not update PACC? (20220305 handegar)
-		state.ACC.Or(op.Args[1].RawValue)
+		state.PACC.Copy(state.ACC)
+		state.ACC.Or(op.Args[1].RawValue)		
 		return nil
 	},
 	"XOR": func(op base.Op, state *State) error {

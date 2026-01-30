@@ -2,7 +2,6 @@ package dsp
 
 import (
 	"github.com/handegar/fv1emu/base"
-	"github.com/handegar/fv1emu/settings"
 	"github.com/handegar/fv1emu/utils"
 )
 
@@ -11,53 +10,46 @@ import (
 //
 
 func CHO_RDAL(op base.Op, state *State) error {
+
+	// NOTE: Adding flags to "CHO RDAL" is an undocumented feature. Same
+	// restrictions as for the other CHO commands.
+	flags := int(op.Args[3].RawValue)
 	typ := int(op.Args[1].RawValue)
-	lfoValue := GetLFOValue(typ, state, false) // Read LFO from internal reg
-
-	// NOTE: The debug-flags only apply to SIN0/RMP0, *not* SIN1/RMP1
-	if settings.CHO_RDAL_is_NA && !isSinLFO(typ) && typ == base.LFO_RMP0 {
-		// Used when debugging the NA envelope
-		xfade := GetXFadeFromLFO(lfoValue, typ, state)
-		state.ACC.SetFloat64(xfade)
-
-	} else if settings.CHO_RDAL_is_NA_COMPC && !isSinLFO(typ) && typ == base.LFO_RMP0 {
-		// Used when debugging the NA envelope
-		xfade := GetXFadeFromLFO(lfoValue, typ, state)
-		// FIXME: Double check to see if we can COMPC xFade like this. (20220922 handegar)
-		xfade = 1.0 - xfade
-		state.ACC.SetFloat64(xfade)
-
-	} else if settings.CHO_RDAL_is_RPTR2 && !isSinLFO(typ) && typ == base.LFO_RMP0 {
-		// Used when debugging the RPTR2 envelope
-		lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, state)
-		utils.Assert(lfoValue != lfoPlusHalf, "Internal RPTR2 error! (%f == %f)", lfoValue, lfoPlusHalf)
-		state.ACC.SetFloat64(lfoPlusHalf)
-
-	} else if settings.CHO_RDAL_is_RPTR2_COMPC && !isSinLFO(typ) && typ == base.LFO_RMP0 {
-		// Used when debugging the RPTR2 envelope
-		lfoPlusHalf := GetLFOValuePlusHalfCycle(typ, state)
-		utils.Assert(lfoValue != lfoPlusHalf, "Internal RPTR2 error!")
-		lfoPlusHalf = 1.0 - lfoPlusHalf
-		state.ACC.SetFloat64(lfoPlusHalf)
-
-	} else if settings.CHO_RDAL_is_COMPA && (typ == base.LFO_RMP0 || typ == base.LFO_SIN0) {
-		// Used when debugging the COMPA envelope
-		state.ACC.SetFloat64(-lfoValue)
-
-	} else if settings.CHO_RDAL_is_COMPC && (typ == base.LFO_SIN0 || typ == base.LFO_RMP0) {
-		// Used when debugging the COMPC envelope
-		lfoValue = 1.0 - lfoValue
-		state.ACC.SetFloat64(lfoValue)
-
-	} else if settings.CHO_RDAL_is_COS && typ == base.LFO_SIN0 {
-		// Used when debugging the COS envelope
-		lfoValue = GetLFOValue(typ+4, state, false)
-		state.ACC.SetFloat64(lfoValue)
-
-	} else {
-		// Regular CHO RDAL
-		state.ACC.SetFloat64(lfoValue)
+	
+	if (flags & base.CHO_COS) != 0 {
+		utils.Assert(isSinLFO(typ), "Cannot use the COS flag with RAMP LFOs")
+		typ += 4 // Make SIN -> COS
 	}
 
+
+	lfo := GetLFOValue(typ, state, (flags&base.CHO_REG) != 0) // Read LFO from internal reg
+
+
+	if (flags & base.CHO_RPTR2) != 0 {
+		utils.Assert(!isSinLFO(typ), "Cannot use RPTR2 with SIN LFOs")
+		lfo = GetLFOValuePlusHalfCycle(typ, state)
+	}
+
+	if flags&base.CHO_COMPA != 0 {
+		if isSinLFO(typ) {
+			lfo = -lfo
+		} else {
+			lfo = 1.0 - lfo
+		}
+	}
+
+
+	if (flags & base.CHO_NA) != 0 { // ==== Shall we do the X-FADE? ==
+		utils.Assert(!isSinLFO(typ), "Cannot use the NA flag with SIN LFOs")
+		
+		xfade := GetXFadeFromLFO(lfo, typ, state)
+		if (flags & base.CHO_COMPC) != 0 {
+			xfade = 1.0 - xfade
+		}
+
+		lfo = xfade
+	}
+	
+	state.ACC.SetFloat64(lfo)
 	return nil
 }

@@ -113,26 +113,6 @@ func parseCommandLineParameters() bool {
 	flag.BoolVar(&settings.PrintDebug, "print-debug",
 		settings.PrintDebug, "Print additional info when debugging")
 
-	//
-	// Debug stuff. Mostly relevant when bugfixing fv1emu itself.
-	//
-	flag.BoolVar(&settings.CHO_RDAL_is_NA, "cho-rdal-is-NA", settings.CHO_RDAL_is_NA,
-		"DEBUG: The 'CHO RDAL' op will output the NA crossfade envelope for RMP0")
-	flag.BoolVar(&settings.CHO_RDAL_is_NA_COMPC, "cho-rdal-is-NA-COMPC", settings.CHO_RDAL_is_NA_COMPC,
-		"DEBUG: The 'CHO RDAL' op will output the NA|COMPC crossfade envelope for RMP0")
-	flag.BoolVar(&settings.CHO_RDAL_is_RPTR2, "cho-rdal-is-RPTR2", settings.CHO_RDAL_is_RPTR2,
-		"DEBUG: The 'CHO RDAL' op will output the RPTR2 envelope for RMP0")
-	flag.BoolVar(&settings.CHO_RDAL_is_RPTR2_COMPC, "cho-rdal-is-RPTR2-COMPC", settings.CHO_RDAL_is_RPTR2_COMPC,
-		"DEBUG: The 'CHO RDAL' op will output the RPTR2|COMPC envelope for RMP0")
-	flag.BoolVar(&settings.CHO_RDAL_is_COMPA, "cho-rdal-is-COMPA", settings.CHO_RDAL_is_COMPA,
-		"DEBUG: The 'CHO RDAL' op will output the COMPA envelope for SIN0/RMP0")
-	flag.BoolVar(&settings.CHO_RDAL_is_COMPC, "cho-rdal-is-COMPC", settings.CHO_RDAL_is_COMPC,
-		"DEBUG: The 'CHO RDAL' op will output the COMPC envelope for SIN0/RMP0")
-	flag.BoolVar(&settings.CHO_RDAL_is_COS, "cho-rdal-is-COS", settings.CHO_RDAL_is_COS,
-		"DEBUG: The 'CHO RDAL' op will output the COS envelope for SIN0")
-	flag.StringVar(&settings.ProfilerFilename, "profile", settings.ProfilerFilename,
-		"DEBUG: Activate the GOLang CPU profiler by specifying the output file")
-
 	flag.Parse()
 
 	if flag.NFlag() == 0 {

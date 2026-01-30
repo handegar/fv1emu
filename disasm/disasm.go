@@ -323,7 +323,7 @@ func CHO_ToString(op base.Op) string {
 
 	case 0b11:
 		cmd = "RDAL"
-		return fmt.Sprintf("CHO   RDAL, %s", typ)
+		return fmt.Sprintf("CHO   RDAL, %s, %s", typ, strings.Join(flags, "|"))
 
 	default:
 		cmd = fmt.Sprintf("<0b%b>", op.Args[4].RawValue)
