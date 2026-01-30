@@ -17,13 +17,14 @@ const CURSOR_COLOR = "(bg:green)"
 const VALUE_COLOR = "(fg:red)"
 
 func renderMemoryMap(state *dsp.State, sampleNum int, cursorPosition int) {
-	width, height := termui.TerminalDimensions()
+	width := uiState.terminalWidth
+	height := uiState.terminalHeight
 	ypos := 0
 
 	memMap := widgets.NewParagraph()
 	memMap.Title = fmt.Sprintf("  '\u2593': 3/3 set | '\u2592': 2/3 set | '\u2591': 1/3 set | '.': Zero  "+
 		"(sample #%d)  ", sampleNum)
-	memMap.TitleStyle = termui.NewStyle(termui.ColorYellow, termui.ColorBlue)
+	memMap.TitleStyle = boxTitleStyle
 	memMapTxt, valuesPerChar := buildMemMapText(width-1, height-1, state)
 	memMapTxt = colorMemoryMap(memMapTxt, cursorPosition, valuesPerChar)
 
