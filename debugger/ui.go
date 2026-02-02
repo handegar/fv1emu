@@ -21,13 +21,13 @@ const (
 )
 
 type UIState struct {
-	terminalWidth   int
-	terminalHeight  int
-	centerLine int
+	terminalWidth  int
+	terminalHeight int
+	centerLine     int
 
 	showRegistersAsFloats bool
-	currentScreen int
-	memoryCursor int
+	currentScreen         int
+	memoryCursor          int
 
 	codeView        *widgets.Paragraph
 	metaInfoView    *widgets.Paragraph
@@ -43,6 +43,12 @@ var uiState UIState
 
 var boxTitleStyle = termui.NewStyle(termui.ColorRed, termui.ColorBlue)
 
+func Init() {
+	width, height := termui.TerminalDimensions()
+	uiState.terminalHeight = height
+	uiState.terminalWidth = width
+	uiState.centerLine = max(width/2, 53)
+}
 
 /*
 Returns the Event.ID string for events which is relevant for others
@@ -96,6 +102,11 @@ func WaitForInput(state *dsp.State) string {
 			uiState.showRegistersAsFloats = !uiState.showRegistersAsFloats
 			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 		case "<Resize>":
+			width, height := termui.TerminalDimensions()
+			uiState.terminalHeight = height
+			uiState.terminalWidth = width
+			uiState.centerLine = max(width/2, 53)
+
 			UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 		}
 	}
@@ -121,11 +132,6 @@ func UpdateScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
 }
 
 func renderMainScreen(opCodes []base.Op, state *dsp.State, sampleNum int) {
-	width, height := termui.TerminalDimensions()
-	uiState.terminalHeight = height
-	uiState.terminalWidth = width
-	uiState.centerLine = max(width / 2, 53)
-
 	updateCodeView(opCodes, state)
 	updateStateView(sampleNum, state)
 	updateMetaInfoView(opCodes, state)
@@ -142,7 +148,7 @@ func renderUiState() {
 }
 
 func increaseMemoryCursor(count int) {
-	uiState.memoryCursor += calculateMemoryValuesPerChar() * count
+	uiState.memoryCursor += count
 	if uiState.memoryCursor >= dsp.DELAY_RAM_SIZE {
 		uiState.memoryCursor = uiState.memoryCursor - dsp.DELAY_RAM_SIZE
 	}
@@ -151,14 +157,13 @@ func increaseMemoryCursor(count int) {
 }
 
 func decreaseMemoryCursor(count int) {
-	uiState.memoryCursor -= calculateMemoryValuesPerChar() * count
+	uiState.memoryCursor -= count
 	if uiState.memoryCursor < 0 {
 		uiState.memoryCursor = dsp.DELAY_RAM_SIZE + uiState.memoryCursor
 	}
 
 	UpdateScreen(lastOpCodes, lastState, lastSampleNum)
 }
-
 
 func updateHelpLineView() {
 	width, height := termui.TerminalDimensions()
@@ -252,7 +257,6 @@ func updateCodeView(opCodes []base.Op, state *dsp.State) {
 	uiState.codeView = code
 }
 
-
 func makeSineString(typ int, state *dsp.State) string {
 	sinRate := int32(0)
 	sinRange := int32(0)
@@ -287,11 +291,9 @@ func makeSineString(typ int, state *dsp.State) string {
 	lfoStr += fmt.Sprintf("[(%.2f hz)](fg:gray)   ", sinhz)
 	lfoStr += fmt.Sprintf("[Amp:](fg:cyan) %d [(%.2f%%)](fg:gray)   ", sinRange, sinrange)
 	lfoStr += fmt.Sprintf("[Value:](fg:cyan) %f\n", sin)
-	lfoStr += fmt.Sprintf("       [Cos:](fg:cyan) %.3f   [CmpC:](fg:cyan) %.3f   [CmpA:](fg:cyan) %.3f   [Reg:](fg:cyan) %.2f\n",
-		cos,
-		1.0-sin,
-		-sin,
-		reg)
+	lfoStr += fmt.Sprintf("       [Cos:](fg:cyan) %.3f   [CompC:](fg:cyan) %.3f   [CompA:](fg:cyan) %.3f\n",
+		cos, 1.0-sin, -sin)
+	lfoStr += fmt.Sprintf("       [Reg:](fg:cyan) %.2f\n", reg)
 
 	return lfoStr
 }
@@ -323,10 +325,11 @@ func makeRampString(typ int, state *dsp.State) string {
 	lfoStr += fmt.Sprintf("[Range:](fg:cyan) %d   ", ampRegValue)
 	lfoStr += fmt.Sprintf("[Value:](fg:cyan) %f\n", lfo)
 
-	lfoStr += fmt.Sprintf("       [NA:](fg:cyan) %.3f   [CmpC:](fg:cyan) %.3f   [CmpA:](fg:cyan) %.3f   [Half:](fg:cyan) %.2f   [Reg:](fg:cyan) %.2f\n",
+	lfoStr += fmt.Sprintf("       [NA:](fg:cyan) %.3f   [CompC:](fg:cyan) %.3f   [CompA:](fg:cyan) %.3f\n",
 		dsp.GetXFadeFromLFO(lfo, typ, state),
 		1.0-lfo,
-		dsp.GetRampRange(typ, state)-lfo,
+		dsp.GetRampRange(typ, state)-lfo)
+	lfoStr += fmt.Sprintf("       [Half:](fg:cyan) %.2f  [Reg:](fg:cyan) %.2f\n",
 		dsp.GetLFOValuePlusHalfCycle(typ, state),
 		reg)
 	return lfoStr
@@ -345,10 +348,10 @@ func updateStateView(sampleNum int, state *dsp.State) {
 		"[PACC:](fg:yellow) %s   [LR:](fg:yellow) %s\n"+
 		" [ADDR_PTR:](fg:yellow) %d   [DelayRAMPtr:](fg:yellow) %d   [RUN:](fg:yellow) %d\n",
 		// FIXME: Is the ACC an S.23 or an S1.14? (20220305 handegar)
-		overflowColored(state.ACC.ToFloat64(), -2.0, 2.0), state.ACC.Value,
-		overflowColored(state.PACC.ToFloat64(), -2.0, 2.0),
+		overflowColored(state.ACC.ToFloat64(), -1.0, 1.0), state.ACC.ToInt32(),
+		overflowColored(state.PACC.ToFloat64(), -1.0, 1.0),
 		overflowColored(state.LR.ToFloat64(), -1.0, 1.0),
-		int(state.Registers[base.ADDR_PTR].ToInt32())>>8,
+		state.Registers[base.ADDR_PTR].ToInt32(),
 		state.DelayRAMPtr,
 		rfInt)
 
@@ -382,7 +385,7 @@ func updateStateView(sampleNum int, state *dsp.State) {
 	lfoP.TitleStyle = boxTitleStyle
 	lfoP.BorderStyle = termui.NewStyle(termui.ColorGreen)
 	lfoP.Text = lfoStr
-	lfoP.SetRect(hPos, vPos, twidth, vPos+10)
+	lfoP.SetRect(hPos, vPos, twidth, vPos+14)
 	vPos += 10
 
 	uiState.mainStateView = stateP
@@ -392,9 +395,8 @@ func updateStateView(sampleNum int, state *dsp.State) {
 func updateRegistersView(state *dsp.State) {
 	twidth := uiState.terminalWidth
 	theight := uiState.terminalHeight - 1 // Save one for the keys line
-	vPos := 17
+	vPos := 21
 	hPos := uiState.centerLine
-
 
 	valAsStr := func(registerNr int) string {
 		if uiState.showRegistersAsFloats {
@@ -428,9 +430,11 @@ func updateRegistersView(state *dsp.State) {
 
 	// General registers
 	for i := 0x20; i <= 0x3f; i += 3 {
-		regStr += fmt.Sprintf(" [REG%d:](fg:cyan)", i - 0x20)
+		regStr += fmt.Sprintf(" [REG%d:](fg:cyan)", i-0x20)
 
-		if i -0x20 <10 { regStr += " " }
+		if i-0x20 < 10 {
+			regStr += " "
+		}
 
 		if uiState.showRegistersAsFloats {
 			regStr += fmt.Sprintf(" %s  ", overflowColored(state.Registers[i].ToFloat64(), -1.0, 1.0))
@@ -438,8 +442,10 @@ func updateRegistersView(state *dsp.State) {
 			regStr += fmt.Sprintf(" %d  ", state.Registers[i].ToInt32())
 		}
 
-		regStr += fmt.Sprintf(" [REG%d:](fg:cyan)", i+1 - 0x20)
-		if i +1  -0x20 <10 { regStr += " " }
+		regStr += fmt.Sprintf(" [REG%d:](fg:cyan)", i+1-0x20)
+		if i+1-0x20 < 10 {
+			regStr += " "
+		}
 
 		if uiState.showRegistersAsFloats {
 			regStr += fmt.Sprintf(" %s  ", overflowColored(state.Registers[i+1].ToFloat64(), -1.0, 1.0))
@@ -447,15 +453,18 @@ func updateRegistersView(state *dsp.State) {
 			regStr += fmt.Sprintf(" %d  ", state.Registers[i+1].ToInt32())
 		}
 
-		regStr += fmt.Sprintf(" [REG%d:](fg:cyan)", i+2 - 0x20)
-		if i +2 -0x20 <10 { regStr += " " }
+		if i < (0x3f - 1) {
+			regStr += fmt.Sprintf(" [REG%d:](fg:cyan)", i+2-0x20)
+			if i+2-0x20 < 10 {
+				regStr += " "
+			}
 
-		if uiState.showRegistersAsFloats {
-			regStr += fmt.Sprintf(" %s\n", overflowColored(state.Registers[i+1].ToFloat64(), -1.0, 1.0))
-		} else {
-			regStr += fmt.Sprintf(" %d\n", state.Registers[i+1].ToInt32())
+			if uiState.showRegistersAsFloats {
+				regStr += fmt.Sprintf(" %s\n", overflowColored(state.Registers[i+1].ToFloat64(), -1.0, 1.0))
+			} else {
+				regStr += fmt.Sprintf(" %d\n", state.Registers[i+1].ToInt32())
+			}
 		}
-
 	}
 
 	regP := widgets.NewParagraph()
