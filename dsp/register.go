@@ -10,9 +10,7 @@ import (
 
 /**
   This is a register object which can hold any Q-Format number as long
-  as it fits into the internal 32-bit S8.23 format:
-
-    [ sign | 7bit integer | 24bit fraction ]
+  as it fits into the internal 32-bit:
 
   The value is always considered as a potentially signed.
 */
@@ -61,7 +59,7 @@ func (r *Register) SetToMax24Bit() *Register {
 }
 
 func (r *Register) SetToMin24Bit() *Register {
-	r.Value = -0x800000
+	r.Value = 0x800000
 	return r
 }
 
@@ -142,7 +140,24 @@ func (r *Register) SetInt32(value int32) *Register {
 	return r
 }
 
+func Extend24to32(n int32) int32 {
+	// Mask to ensure only the lower 24 bits are considered
+	// (though if input is already 24-bit, this is for clarity)
+	value := n & 0xFFFFFF
+
+	// Check if the sign bit (bit 23) is set
+	if value&0x800000 != 0 {
+		// If set, perform sign extension by filling the upper 8 bits with 1s
+		// 0xFF000000 in two's complement for int32 represents the sign extension
+		return -value
+	}
+	// Otherwise, it's a positive number, return as is (zero extended)
+	return int32(value)
+}
+
 func (r *Register) ToInt32() int32 {
+	// Shift left so the signed bit gets "stuck", then shift back right.
+	//return (r.Value << 8) >> 8
 	return r.Value
 }
 
@@ -154,7 +169,7 @@ func (r *Register) ToQFormat(intBits int, fractionBits int) int32 {
 }
 
 func (r *Register) ToFloat64() float64 {
-	return float64(r.Value) / (1 << 23)
+	return float64(r.ToInt32()) / (1 << 23)
 }
 
 func (r *Register) Copy(reg *Register) *Register {

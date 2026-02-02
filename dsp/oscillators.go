@@ -2,9 +2,11 @@ package dsp
 
 import (
 	//"fmt"
+
+	"math"
+
 	"github.com/handegar/fv1emu/settings"
 	"github.com/handegar/fv1emu/utils"
-	"math"
 )
 
 //
@@ -64,53 +66,45 @@ func (s *SineOscillator) GetCosine() float64 {
 //
 
 type RampOscillator struct {
-	value  float64
-	freq   int32
-	ampIdx int8 // 0..3 => 4k, 2k, 1k, 512
+	value int32
+	freq  int32
+	amp   int32 // 512, 1024, 2048 or 4096
 }
 
 func (r *RampOscillator) Update() {
 	utils.Assert(r.freq >= -16384 && r.freq <= 32767,
 		"Ramp0 rate out of range [-16384 .. 38767]: %d", r.freq)
-
-	// Calibrated so that max freq -> saw of 20 hz
-	//delta := (float64(r.freq) / settings.ClockFrequency) / float64(settings.InstructionsPerSample) / 1024.0
-
-	delta := ((float64(r.freq) / settings.ClockFrequency) / 4096.0) / float64(settings.InstructionsPerSample)
-
-	//delta := float64(r.freq) / 4096.0
-
-	r.value -= delta
-	//fmt.Printf("val=%f, delta=%f, freq=%d\n", r.value, delta, r.freq)
-
-	if r.value >= 1.0 {
-		r.value -= 1.0
-	}
+	r.value -= r.freq >> 2
 	if r.value < 0 {
-		r.value += 1.0
+		r.value = 0x7FFFFFFF
 	}
 }
 
 func (r *RampOscillator) SetFreq(freq int32) {
-	utils.Assert(freq < 32769 && freq > -16384, "Ramp freq out of range: %d", freq)
+	utils.Assert(freq < 32769 && freq >= -16384, "Ramp freq out of range: %d", freq)
 	r.freq = freq
 }
 
 // Input: 0, 1, 2 or 3
-func (r *RampOscillator) SetAmpIdx(amp int8) {
-	utils.Assert(amp >= 0 && amp <= 3, "Invalid amp value: %d", amp)
-	r.ampIdx = amp
+func (r *RampOscillator) SetAmpIdx(ampIdx int8) {
+	utils.Assert(ampIdx >= 0 && ampIdx <= 3, "Invalid AmpIdx value: %d", ampIdx)
+	r.amp = 512 << ampIdx
 }
 
 // Will choose a matching ampidx.
-// Input 0 .. 1.0
-func (r *RampOscillator) SetAmp(amp float64) {
-	r.ampIdx = int8(amp * 4)
+// Input: 512, 1024, 2048 or 4096
+func (r *RampOscillator) SetAmp(amp int32) {
+	utils.Assert(amp == 512 || amp == 1024 || amp == 2048 || amp == 2096,
+		"Invalid Ramp amp value")
+	r.amp = amp
 }
 
 // Always returns a value between 0 and 0.5
+// FIXME: Return <0 .. 1.0> or <0 .. 0.5>? (20260202 handegar)
 func (r *RampOscillator) GetValue() float64 {
-	return r.value
+	// FIXME: Here we could do a quick bitshift instead I think (20260202 handegar)
+	//fmt.Printf("r.val=%d\n", r.value)
+	return float64(r.value) / float64(0x7FFFFFFF)
 }
 
 func (r *RampOscillator) Reset() {

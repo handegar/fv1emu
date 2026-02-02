@@ -10,7 +10,7 @@ import (
 )
 
 func PrintCodeListing(opCodes []base.Op) {
-	fmt.Printf("\n;;\n;; Dissassembly (%d opcodes)\n;;\n", len(opCodes))
+	fmt.Printf("\n;;\n;; Disassembly (%d opcodes)\n;;\n", len(opCodes))
 	var skpTargets []int
 	for pos, opCode := range opCodes {
 		op := OpCodeToString(opCode, pos, settings.PrintDebug)
@@ -164,19 +164,28 @@ func JAM_ToString(op base.Op) string {
 }
 
 func AND_ToString(op base.Op) string {
+	if settings.ShowCodeIntsAsHex {
+		return fmt.Sprintf("AND   0x%x", op.Args[1].RawValue)
+	}
 	return fmt.Sprintf("AND   %%%b", op.Args[1].RawValue)
 }
 
 func OR_ToString(op base.Op) string {
+	if settings.ShowCodeIntsAsHex {
+		return fmt.Sprintf("OR    0x%x", op.Args[1].RawValue)
+	}
 	return fmt.Sprintf("OR    %%%b", op.Args[1].RawValue)
 }
 
 func XOR_ToString(op base.Op) string {
+	if settings.ShowCodeIntsAsHex {
+		return fmt.Sprintf("XOR   0x%x", op.Args[1].RawValue)
+	}
 	return fmt.Sprintf("XOR   %%%b", op.Args[1].RawValue)
 }
 
 func NOT_ToString(op base.Op) string {
-	return fmt.Sprintf("NOT   ")
+	return fmt.Sprintf("NOT")
 }
 
 func SKP_ToString(op base.Op, ip int) string {
@@ -308,13 +317,18 @@ func CHO_ToString(op base.Op) string {
 			}
 		}
 	} else {
-		flags = append(flags, base.ChoFlagSymbols[0])
+		if typ != "RMP0" && typ != "RMP1" {
+			flags = append(flags, base.ChoFlagSymbols[0])
+		} else {
+			flags = append(flags, "<None>")
+		}
 	}
 
 	cmd := ""
 	switch op.Args[4].RawValue {
 	case 0b10:
-		return fmt.Sprintf("CHO   SOF, %s, %s, mem_%d",
+		return fmt.Sprintf("CHO   SOF, %s, %s, %d",
+			// In "cho sof" the last parameter is not "addr" but a constant "D"
 			typ, strings.Join(flags, "|"), addr)
 
 	case 0b0:

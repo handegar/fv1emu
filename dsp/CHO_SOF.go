@@ -1,8 +1,6 @@
 package dsp
 
 import (
-	//"fmt"
-
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/utils"
 )
@@ -41,23 +39,23 @@ func CHO_SOF(op base.Op, state *State) error {
 	if (flags & base.CHO_NA) != 0 { // ==== Shall we do the X-FADE? ==
 		utils.Assert(!isSinLFO(typ), "Cannot use the NA flag with SIN LFOs")
 
-		
+		// XFade before COMPC
 		xfade := GetXFadeFromLFO(lfo, typ, state)
 		if (flags & base.CHO_COMPC) != 0 {
 			xfade = 1.0 - xfade
 		}
 		state.scaleReg.SetFloat64(xfade)
-		
 
 		/*
-		if (flags & base.CHO_COMPC) != 0 {
-			lfo = 1.0 - lfo
-		}
-		xfade := GetXFadeFromLFO(lfo, typ, state)
+			   // COMPC before XFade
+			if (flags & base.CHO_COMPC) != 0 {
+				lfo = 1.0 - lfo
+			}
+			xfade := GetXFadeFromLFO(lfo, typ, state)
 		*/
+
 		state.scaleReg.SetFloat64(xfade)
 
-		
 	} else { // =================================  Regular envelope ==
 		if (flags & base.CHO_COMPC) != 0 {
 			lfo = 1.0 - lfo

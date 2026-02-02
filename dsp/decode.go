@@ -1,6 +1,7 @@
 package dsp
 
 import (
+	//"fmt"
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
 )
@@ -8,14 +9,14 @@ import (
 func DecodeOp(opcode uint32) base.Op {
 	opcodeNum := opcode & 0x1F          // Lower 5 bits
 	subOpcodeNum := opcode & 0xc0000000 // Upper 2 bits
-	opOriginal := base.Ops[opcodeNum]
+	opDef := base.Ops[opcodeNum]
 
 	var op base.Op
-	op.Name = opOriginal.Name
+	op.Name = opDef.Name
 	op.RawValue = int32(opcode)
 
 	// Copy over all args
-	for _, a := range opOriginal.Args {
+	for _, a := range opDef.Args {
 		op.Args = append(op.Args, a)
 	}
 
@@ -29,14 +30,25 @@ func DecodeOp(opcode uint32) base.Op {
 			{Len: 2, Type: base.Const, RawValue: 0}}
 	}
 
-	bitPos := 5 // Skip the opcode field
-	for i, arg := range op.Args {
-		var paramBits uint32 = opcode
-		paramBits = (opcode >> bitPos) & ((1 << arg.Len) - 1)
-		if arg.Type != base.Blank {
-			op.Args[i].RawValue = int32(paramBits)
+	if op.Name == "OR" || op.Name == "AND" || op.Name == "XOR" {
+		// HACK: These ops has only one 24 bits parameter which can be signed.
+		// FIXME: Clean this up. There has GOT to be a better way to solve
+		// this. (20260201 handegar)
+		op.Args[1].RawValue = int32(opcode) >> (5 + 3)
+	} else {
+		// Clear op code
+		args := int32(opcode) >> 5
+		bitPos := 0
+		for i, arg := range op.Args {
+			mask := int32((1 << arg.Len) - 1)
+			var paramBits = (args >> bitPos) & mask
+			if arg.Type != base.Blank {
+				op.Args[i].RawValue = paramBits
+			} else {
+				op.Args[i].RawValue = 0
+			}
+			bitPos += arg.Len
 		}
-		bitPos += arg.Len
 	}
 
 	//

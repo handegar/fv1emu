@@ -1,5 +1,17 @@
 package base
 
+type OpArg struct {
+	Len      int // Length of argument (in bits)
+	Type     int
+	RawValue int32
+}
+
+type Op struct {
+	Name     string
+	Args     []OpArg
+	RawValue int32
+}
+
 var Ops = map[uint32]Op{
 	0x0B: {"LOG",
 		[]OpArg{{11, Real_4_6, 0}, {16, Real_1_14, 0}},
@@ -16,7 +28,6 @@ var Ops = map[uint32]Op{
 	0x0F: {"OR",
 		[]OpArg{{4, Blank, 0}, {24, Bin, 0}},
 		0},
-
 	0x10: {"XOR", // Also NOT if arg=0xFFFFF8
 		[]OpArg{{4, Blank, 0}, {24, Bin, 0}},
 		0},
@@ -72,59 +83,76 @@ var Ops = map[uint32]Op{
 
 // Symbols as strings
 var Symbols = map[int]string{
-	0x00:       "SIN0_RATE",  // (0)  SIN 0 rate
-	0x01:       "SIN0_RANGE", // (1)  SIN 0 range
-	0x02:       "SIN1_RATE",  // (2)  SIN 1 rate
-	0x03:       "SIN1_RANGE", // (3)  SIN 1 range
-	0x04:       "RMP0_RATE",  // (4)  RMP 0 rate
-	0x05:       "RMP0_RANGE", // (5)  RMP 0 range
-	0x06:       "RMP1_RATE",  // (6)  RMP 1 rate
-	0x07:       "RMP1_RANGE", // (7)  RMP 1 range
-	0x10:       "POT0",       // (16)  Pot 0 input register
-	0x11:       "POT1",       // (17)  Pot 1 input register
-	0x12:       "POT2",       // (18)  Pot 2 input register
-	0x14:       "ADCL",       // (20)  ADC input register left channel
-	0x15:       "ADCR",       // (21)  ADC input register  right channel
-	0x16:       "DACL",       // (22)  DAC output register  left channel
-	0x17:       "DACR",       // (23)  DAC output register  right channel
-	0x18:       "ADDR_PTR",   // (24)  Used with 'RMPA' instruction for indirect read
-	0x20:       "REG0",       // (32)  Register 00
-	0x21:       "REG1",       // (33)  Register 01
-	0x22:       "REG2",       // (34)  Register 02
-	0x23:       "REG3",       // (35)  Register 03
-	0x24:       "REG4",       // (36)  Register 04
-	0x25:       "REG5",       // (37)  Register 05
-	0x26:       "REG6",       // (38)  Register 06
-	0x27:       "REG7",       // (39)  Register 07
-	0x28:       "REG8",       // (40)  Register 08
-	0x29:       "REG9",       // (41)  Register 09
-	0x2A:       "REG10",      // (42)  Register 10
-	0x2B:       "REG11",      // (43)  Register 11
-	0x2C:       "REG12",      // (44)  Register 12
-	0x2D:       "REG13",      // (45)  Register 13
-	0x2E:       "REG14",      // (46)  Register 14
-	0x2F:       "REG15",      // (47)  Register 15
-	0x30:       "REG16",      // (48)  Register 16
-	0x31:       "REG17",      // (49)  Register 17
-	0x32:       "REG18",      // (50)  Register 18
-	0x33:       "REG19",      // (51)  Register 19
-	0x34:       "REG20",      // (52)  Register 20
-	0x35:       "REG21",      // (53)  Register 21
-	0x36:       "REG22",      // (54)  Register 22
-	0x37:       "REG23",      // (55)  Register 23
-	0x38:       "REG24",      // (56)  Register 24
-	0x39:       "REG25",      // (57)  Register 25
-	0x3A:       "REG26",      // (58)  Register 26
-	0x3B:       "REG27",      // (59)  Register 27
-	0x3C:       "REG28",      // (60)  Register 28
-	0x3D:       "REG29",      // (61)  Register 29
-	0x3E:       "REG30",      // (62)  Register 30
-	0x3F:       "REG31",      // (63)  Register 31
-	0x80000000: "RUN",        // USED with 'SKP' instruction: Skip if NOT FIRST time through program
-	0x40000000: "ZRC",        // USED with 'SKP' instruction: Skip On Zero Crossing
-	0x20000000: "ZRO",        // USED with 'SKP' instruction: Skip if ACC = 0
-	0x10000000: "GEZ",        // USED with 'SKP' instruction: Skip if ACC is '>= 0'
-	0x8000000:  "NEG",        // USED with 'SKP' instruction: Skip if ACC is Negative
+	0x00: "SIN0_RATE",  // (0)  SIN 0 rate
+	0x01: "SIN0_RANGE", // (1)  SIN 0 range
+	0x02: "SIN1_RATE",  // (2)  SIN 1 rate
+	0x03: "SIN1_RANGE", // (3)  SIN 1 range
+	0x04: "RMP0_RATE",  // (4)  RMP 0 rate
+	0x05: "RMP0_RANGE", // (5)  RMP 0 range
+	0x06: "RMP1_RATE",  // (6)  RMP 1 rate
+	0x07: "RMP1_RANGE", // (7)  RMP 1 range
+	0x08: "<R8!>",      // (8)  Unofficial register
+	0x09: "<R9!>",      // (9)  Unofficial register
+	0x0a: "<R10!>",     // (10) Unofficial register
+	0x0b: "<R11!>",     // (11) Unofficial register
+	0x0c: "<R12!>",     // (12) Unofficial register
+	0x0d: "<R13!>",     // (13) Unofficial register
+	0x0e: "<R14!>",     // (14) Unofficial register
+	0x0f: "<R15!>",     // (15) Unofficial register
+
+	0x10:       "POT0",     // (16)  Pot 0 input register
+	0x11:       "POT1",     // (17)  Pot 1 input register
+	0x12:       "POT2",     // (18)  Pot 2 input register
+	0x13:       "<R19!>",   // (19)  Unofficial register
+	0x14:       "ADCL",     // (20)  ADC input register left channel
+	0x15:       "ADCR",     // (21)  ADC input register  right channel
+	0x16:       "DACL",     // (22)  DAC output register  left channel
+	0x17:       "DACR",     // (23)  DAC output register  right channel
+	0x18:       "ADDR_PTR", // (24)  Used with 'RMPA' instruction for indirect read
+	0x19:       "<R25!>",   // (25) Unofficial register
+	0x1a:       "<R26!>",   // (26) Unofficial register
+	0x1b:       "<R27!>",   // (27) Unofficial register
+	0x1c:       "<R28!>",   // (28) Unofficial register
+	0x1d:       "<R29!>",   // (29) Unofficial register
+	0x1e:       "<R30!>",   // (30) Unofficial register
+	0x1f:       "<R31!>",   // (31) Unofficial register
+	0x20:       "REG0",     // (32)  Register 00
+	0x21:       "REG1",     // (33)  Register 01
+	0x22:       "REG2",     // (34)  Register 02
+	0x23:       "REG3",     // (35)  Register 03
+	0x24:       "REG4",     // (36)  Register 04
+	0x25:       "REG5",     // (37)  Register 05
+	0x26:       "REG6",     // (38)  Register 06
+	0x27:       "REG7",     // (39)  Register 07
+	0x28:       "REG8",     // (40)  Register 08
+	0x29:       "REG9",     // (41)  Register 09
+	0x2A:       "REG10",    // (42)  Register 10
+	0x2B:       "REG11",    // (43)  Register 11
+	0x2C:       "REG12",    // (44)  Register 12
+	0x2D:       "REG13",    // (45)  Register 13
+	0x2E:       "REG14",    // (46)  Register 14
+	0x2F:       "REG15",    // (47)  Register 15
+	0x30:       "REG16",    // (48)  Register 16
+	0x31:       "REG17",    // (49)  Register 17
+	0x32:       "REG18",    // (50)  Register 18
+	0x33:       "REG19",    // (51)  Register 19
+	0x34:       "REG20",    // (52)  Register 20
+	0x35:       "REG21",    // (53)  Register 21
+	0x36:       "REG22",    // (54)  Register 22
+	0x37:       "REG23",    // (55)  Register 23
+	0x38:       "REG24",    // (56)  Register 24
+	0x39:       "REG25",    // (57)  Register 25
+	0x3A:       "REG26",    // (58)  Register 26
+	0x3B:       "REG27",    // (59)  Register 27
+	0x3C:       "REG28",    // (60)  Register 28
+	0x3D:       "REG29",    // (61)  Register 29
+	0x3E:       "REG30",    // (62)  Register 30
+	0x3F:       "REG31",    // (63)  Register 31
+	0x80000000: "RUN",      // USED with 'SKP' instruction: Skip if NOT FIRST time through program
+	0x40000000: "ZRC",      // USED with 'SKP' instruction: Skip On Zero Crossing
+	0x20000000: "ZRO",      // USED with 'SKP' instruction: Skip if ACC = 0
+	0x10000000: "GEZ",      // USED with 'SKP' instruction: Skip if ACC is '>= 0'
+	0x8000000:  "NEG",      // USED with 'SKP' instruction: Skip if ACC is Negative
 }
 
 var SkpFlagSymbols = map[int]string{
@@ -149,15 +177,15 @@ var LFOTypeNames = []string{
 	"SIN0", "SIN1", "RMP0", "RMP1", "COS0", "COS1",
 }
 
+// FIXME: Correct order? Same as in disfv1.py, though. (20240713 handegar)
+var RampAmpValues = []int16{4096, 2048, 1024, 512}
+
 var RampAmpValuesMap = map[int16]int8{
 	4096: 0,
 	2048: 1,
 	1024: 2,
 	512:  3,
 }
-
-// FIXME: Correct order? Same as in disfv1.py, though. (20240713 handegar)
-var RampAmpValues = []int16{4096, 2048, 1024, 512}
 
 var SymbolEquivalents = map[int][]string{
 	0x00: {"SIN0_RATE",

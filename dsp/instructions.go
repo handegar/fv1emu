@@ -45,19 +45,18 @@ var opTable = map[string]interface{}{
 		// C*exp(ACC) + D
 		state.PACC.Copy(state.ACC)
 		acc := state.ACC.ToFloat64()
-		
+
 		if acc >= 0 {
 			state.ACC.SetToMax24Bit().Mult(state.workReg1_14).Add(state.workReg0_10)
 		} else {
 			acc = acc * 16.0
 			state.ACC.SetFloat64(math.Exp2(acc)).Mult(state.workReg1_14).Add(state.workReg0_10)
 		}
-		
 
 		/*
-		acc = math.Exp2(acc)*state.workReg1_14.ToFloat64() + state.workReg0_10.ToFloat64()
-		state.ACC.SetFloat64(min(acc, 1.0))
-		*/ 
+			acc = math.Exp2(acc)*state.workReg1_14.ToFloat64() + state.workReg0_10.ToFloat64()
+			state.ACC.SetFloat64(min(acc, 1.0))
+		*/
 		return nil
 	},
 	"SOF": func(op base.Op, state *State) error {
@@ -71,7 +70,8 @@ var opTable = map[string]interface{}{
 	},
 	"AND": func(op base.Op, state *State) error {
 		state.PACC.Copy(state.ACC)
-		state.ACC.And(op.Args[1].RawValue)
+		v := Extend24to32(op.Args[1].RawValue)
+		state.ACC.And(v)
 		return nil
 	},
 	"CLR": func(op base.Op, state *State) error {
@@ -81,17 +81,19 @@ var opTable = map[string]interface{}{
 	},
 	"OR": func(op base.Op, state *State) error {
 		state.PACC.Copy(state.ACC)
-		state.ACC.Or(op.Args[1].RawValue)		
+		v := Extend24to32(op.Args[1].RawValue)
+		state.ACC.Or(v)
 		return nil
 	},
 	"XOR": func(op base.Op, state *State) error {
 		state.PACC.Copy(state.ACC)
-		state.ACC.Xor(op.Args[1].RawValue)
+		v := Extend24to32(op.Args[1].RawValue)
+		state.ACC.Xor(v)
 		return nil
 	},
 	"NOT": func(op base.Op, state *State) error {
 		state.PACC.Copy(state.ACC)
-		state.ACC.Not(op.Args[1].RawValue)
+		state.ACC.Not(0x7FFFFFFF)
 		return nil
 	},
 	"SKP": func(op base.Op, state *State) error {
@@ -115,13 +117,16 @@ var opTable = map[string]interface{}{
 		if (flags&base.SKP_NEG) > 0 && state.ACC.IsSigned() { // NEG
 			jmp = true
 		}
-		if (flags == 0) { // No flags => Always jump
+		if flags == 0 { // No flags => Always jump
 			jmp = true
 		}
-		
+
 		if jmp {
 			state.IP += uint(N)
 		}
+		return nil
+	},
+	"NOP": func(op base.Op, state *State) error {
 		return nil
 	},
 	"RDA": func(op base.Op, state *State) error {
@@ -169,6 +174,7 @@ var opTable = map[string]interface{}{
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryWrite()
 		}
 
+		// NOTE: The delay memory on the FV1 is actually 14 bits (S+10+3), not 24. (I think)
 		state.DelayRAM[idx] = state.ACC.ToQFormat(0, 23)
 		state.ACC.Mult(state.workReg1_9)
 		return nil
@@ -258,7 +264,7 @@ var opTable = map[string]interface{}{
 		case base.RAMP0_RANGE, base.RAMP1_RANGE:
 			ampidx := state.ACC.ToInt32() >> 21 // Reduce to 0, 1, 2 or 3
 			reg.SetInt32(int32(base.RampAmpValues[3-ampidx]))
-										
+
 			if regNo == base.RAMP0_RANGE {
 				state.Ramp0Osc.SetAmpIdx(int8(ampidx))
 			} else {

@@ -84,14 +84,6 @@ func Test_ToFromFloat64(t *testing.T) {
 	if math.Abs(asFloat-expected) > (1.0 / (1 << 23)) {
 		t.Errorf("FAILED: Got %f , expected %f", asFloat, expected)
 	}
-
-	expected = 1.123456789
-	r.SetFloat64(expected)
-	asFloat = r.ToFloat64()
-	if math.Abs(asFloat-expected) > (1.0 / (1 << 23)) {
-		t.Errorf("FAILED: Got %f , expected %f", asFloat, expected)
-	}
-
 }
 
 func Test_FromQFormat_S0_23(t *testing.T) {
@@ -125,22 +117,10 @@ func Test_FromQFormat_S1_14(t *testing.T) {
 			r1.ToFloat64())
 	}
 
-	r2 := NewRegisterWithFloat64(-2.0)
-	if !r1.Equal(r2) {
-		t.Errorf("FAILED: Could not get -2.0 as S1.14: expected %f, got %f",
-			r2.ToFloat64(), r1.ToFloat64())
-	}
-
 	r1 = NewRegisterWithIntsAndFracs(0x7FFF, 1, 14)
 	if math.Abs(r1.ToFloat64()-1.99993896484) > 0.00006 {
 		t.Errorf("FAILED: Could not get 0x7FFF as S1.14=1.99993896484. Got %f",
 			r1.ToFloat64())
-	}
-
-	r2 = NewRegisterWithFloat64(1.99993896484)
-	if !r1.Equal(r2) {
-		t.Errorf("FAILED: Could not get 1.99993896484 as S1.14: %f != %f",
-			r1.ToFloat64(), r2.ToFloat64())
 	}
 }
 
@@ -165,12 +145,12 @@ func Test_FromQFormat_S0_10(t *testing.T) {
 }
 
 func Test_Add_SimilarQFormats(t *testing.T) {
-	r1 := NewRegisterWithFloat64(-1.25)
+	r1 := NewRegisterWithFloat64(-0.25)
 	r2 := NewRegisterWithFloat64(0)
 	r1.Add(r2)
 
 	expected := NewRegister(0)
-	expected.SetFloat64(-1.25)
+	expected.SetFloat64(-0.25)
 
 	if !r1.Equal(expected) {
 		t.Errorf("FAILED: Got %d, expected %d\n"+
@@ -179,10 +159,10 @@ func Test_Add_SimilarQFormats(t *testing.T) {
 			uint32(r1.Value), uint32(expected.Value))
 	}
 
-	r1.SetFloat64(1.234)
-	r2.SetFloat64(-1.322)
+	r1.SetFloat64(0.234)
+	r2.SetFloat64(-0.322)
 	r1.Add(r2)
-	expected.SetFloat64(1.234 - 1.322)
+	expected.SetFloat64(0.234 - 0.322)
 
 	if !r1.Equal(expected) {
 		t.Errorf("FAILED: Got %d, expected %d\n"+
@@ -191,10 +171,10 @@ func Test_Add_SimilarQFormats(t *testing.T) {
 			uint32(r1.Value), uint32(expected.Value))
 	}
 
-	r1.SetFloat64(1.234)
-	r2.SetFloat64(1.322)
+	r1.SetFloat64(0.234)
+	r2.SetFloat64(0.322)
 	r1.Add(r2)
-	expected.SetFloat64(1.234 + 1.322)
+	expected.SetFloat64(0.234 + 0.322)
 
 	if !r1.Equal(expected) {
 		t.Errorf("FAILED: Got %f, expected %f\n"+

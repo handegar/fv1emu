@@ -126,7 +126,9 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 /*
 Return a LFO value scaled with the amplitude value specified in the state
 
-	NOTE: The scaled value is an integer, ie *NOT* <0 .. 1.0>
+		NOTE: The scaled value is an integer, ie *NOT* <0 .. 1.0>
+
+	  FIXME: Is the ramp LFO supposed to only go between 0 .. 0.5 or 0 .. 1.0?
 */
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
@@ -162,10 +164,14 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 
 	if !storeValue {
 		switch lfoType {
-		case base.LFO_SIN0, base.LFO_COS0:
+		case base.LFO_SIN0:
 			return state.sin0LFOReg.ToFloat64()
-		case base.LFO_SIN1, base.LFO_COS1:
+		case base.LFO_COS0:
+			return state.cos0LFOReg.ToFloat64()
+		case base.LFO_SIN1:
 			return state.sin1LFOReg.ToFloat64()
+		case base.LFO_COS1:
+			return state.cos1LFOReg.ToFloat64()
 		case base.LFO_RMP0:
 			return state.ramp0LFOReg.ToFloat64()
 		case base.LFO_RMP1:
@@ -179,15 +185,19 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	case base.LFO_SIN0: // Sine
 		lfo = state.Sin0Osc.GetSine()
 		state.sin0LFOReg.SetFloat64(lfo)
+		state.cos0LFOReg.SetFloat64(state.Sin0Osc.GetCosine())
 	case base.LFO_SIN1:
 		lfo = state.Sin1Osc.GetSine()
 		state.sin1LFOReg.SetFloat64(lfo)
+		state.cos1LFOReg.SetFloat64(state.Sin1Osc.GetCosine())
 	case base.LFO_COS0: // Cosine
 		lfo = state.Sin0Osc.GetCosine()
-		state.sin0LFOReg.SetFloat64(lfo)
+		state.cos0LFOReg.SetFloat64(lfo)
+		state.sin0LFOReg.SetFloat64(state.Sin0Osc.GetSine())
 	case base.LFO_COS1:
 		lfo = state.Sin1Osc.GetCosine()
-		state.sin1LFOReg.SetFloat64(lfo)
+		state.cos1LFOReg.SetFloat64(lfo)
+		state.sin1LFOReg.SetFloat64(state.Sin1Osc.GetSine())
 
 	case base.LFO_RMP0: // Ramps
 		lfo = float64(state.Ramp0Osc.GetValue())
@@ -230,6 +240,7 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 
 	val := 0.0
 	if true {
+
 		// Symetric saw-tooth with flat top. Each part is 1/3 of a cycle
 		if lfo < 1.0/3.0 {
 			val = lfo * 3.0
@@ -252,6 +263,8 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 
 	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
 	state.DebugFlags.XFadeMin = math.Min(state.DebugFlags.XFadeMin, val)
+
+	//fmt.Printf("%f => %f\n", lfo, val)
 
 	return val
 }

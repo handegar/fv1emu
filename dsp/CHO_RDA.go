@@ -2,7 +2,6 @@ package dsp
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/utils"
@@ -90,7 +89,6 @@ func CHO_RDA(op base.Op, state *State) error {
 
 		idx, err := capDelayRAMIndex(state.DelayRAMPtr+delayIndex, state)
 		if err != nil {
-			fmt.Printf("ERROR: %s\n", err)
 			utils.Assert(false, "Mem access out of bounds")
 			return state.DebugFlags.IncreaseOutOfBoundsMemoryRead()
 		}

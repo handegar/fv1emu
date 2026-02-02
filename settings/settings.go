@@ -67,3 +67,15 @@ var WriteRegisterToCSV = -1
 
 // Output filename for the CPU profiler
 var ProfilerFilename = ""
+
+// Allow use of all flags for the "CHO RDA" instruction, not just "REG"
+var AllowAllChoRdalFlags = true
+
+// Show const integers in the code as HEX instead of BINARY
+var ShowCodeIntsAsHex = true
+
+// Don't write the left result to file.
+var MuteLeftOutput = false
+
+// Don't write the right result to file.
+var MuteRightOutput = false

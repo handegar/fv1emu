@@ -5,6 +5,7 @@ import (
 
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/settings"
+	//"github.com/handegar/fv1emu/utils"
 )
 
 const DELAY_RAM_SIZE = 0x8000 // 32k of delay RAM -> 1sec with a 32768Hz clock
@@ -13,7 +14,7 @@ type State struct {
 	IP          uint                  // Instruction pointer
 	DelayRAM    [DELAY_RAM_SIZE]int32 // Internal memory
 	DelayRAMPtr int                   // Moving delay-ram pointer. Decreased each run-through
-	ACC         *Register             // Accumulator (S1.14 or S.23?)
+	ACC         *Register             // Accumulator
 	PACC        *Register             // Same as ACC but from the previous run-through
 	LR          *Register             // The last sample read from the DelayRAM
 	RUN_FLAG    bool                  // Only TRUE the first run of the program
@@ -33,8 +34,11 @@ type State struct {
 
 	// Holds the frozen LFO values when using the 'REG' flag with the CHO
 	// instruction
-	sin0LFOReg  *Register
-	sin1LFOReg  *Register
+	sin0LFOReg *Register
+	sin1LFOReg *Register
+	cos0LFOReg *Register // These regs follow the sine regs. Cannot be adjusted seperatly
+	cos1LFOReg *Register
+
 	ramp0LFOReg *Register
 	ramp1LFOReg *Register
 
@@ -101,11 +105,10 @@ func (s *State) CheckForOverflows() {
 
 func (s *State) GetRegister(regNo int) *Register {
 	err := validateRegisterNo(regNo)
-	if err != nil {
+	if err != nil && !settings.Debugger {
 		fmt.Printf("ERROR: %s\n", err)
 		s.DebugFlags.InvalidRegister = regNo
 		s.DebugFlags.Print()
-		panic("Invalid register number")
 	}
 
 	return s.Registers[regNo]
@@ -119,6 +122,7 @@ func (s *State) Copy(in *State) {
 	s.LR.Copy(in.LR)
 	s.Sin0Osc.value = in.Sin0Osc.value
 	s.Sin1Osc.value = in.Sin1Osc.value
+
 	s.Ramp0Osc.value = in.Ramp0Osc.value
 	s.Ramp1Osc.value = in.Ramp1Osc.value
 	s.DelayRAMPtr = in.DelayRAMPtr
@@ -155,6 +159,8 @@ func (s *State) Reset() {
 
 	s.sin0LFOReg = NewRegister(0)
 	s.sin1LFOReg = NewRegister(0)
+	s.cos0LFOReg = NewRegister(0)
+	s.cos1LFOReg = NewRegister(0)
 	s.ramp0LFOReg = NewRegister(0)
 	s.ramp1LFOReg = NewRegister(0)
 

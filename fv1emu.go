@@ -15,9 +15,6 @@ import (
 	"github.com/fatih/color"
 	ui "github.com/gizak/termui/v3"
 
-	//"github.com/goxpl/beep/v2"
-	//"github.com/goxpl/beep/v2/speaker"
-
 	"github.com/handegar/fv1emu/base"
 	"github.com/handegar/fv1emu/debugger"
 	"github.com/handegar/fv1emu/disasm"
@@ -60,6 +57,7 @@ func parseCommandLineParameters() bool {
 	var allPotsToMax bool = false
 	flag.BoolVar(&allPotsToMax, "pmax",
 		allPotsToMax, "Set all potensiometers to maximum")
+
 	var allPotsToMin bool = false
 	flag.BoolVar(&allPotsToMin, "pmin",
 		allPotsToMin, "Set all potensiometers to minimum")
@@ -113,8 +111,19 @@ func parseCommandLineParameters() bool {
 	flag.BoolVar(&settings.PrintDebug, "print-debug",
 		settings.PrintDebug, "Print additional info when debugging")
 
-	flag.Parse()
+	flag.BoolVar(&settings.AllowAllChoRdalFlags, "allow-all-cho-rdal-flags",
+		settings.AllowAllChoRdalFlags, "Allow all flags for the CHO RDAL instruction, not just REG.")
 
+	flag.BoolVar(&settings.ShowCodeIntsAsHex, "show-code-ints-as-hex",
+		settings.ShowCodeIntsAsHex, "Display integers in the code as HEX instead of BINARY")
+
+	flag.BoolVar(&settings.MuteLeftOutput, "mute-left-output",
+		settings.MuteLeftOutput, "Don't write the left channel to disk")
+
+	flag.BoolVar(&settings.MuteRightOutput, "mute-right-output",
+		settings.MuteRightOutput, "Don't write the right channel to disk")
+
+	flag.Parse()
 	if flag.NFlag() == 0 {
 		fmt.Printf("  Type \"./%s -help\" for more info.\n", filepath.Base(os.Args[0]))
 		return false
@@ -184,10 +193,10 @@ func updateWavStatistics(sampleNum int, left float64, right float64, statistics 
 }
 
 func printWavStatistics(statistics *WavStatistics) {
-	if statistics.Left.Silent {
+	if statistics.Left.Silent && !settings.MuteLeftOutput {
 		color.Cyan("* NOTE: Left channel is completely silent.")
 	}
-	if statistics.Right.Silent {
+	if statistics.Right.Silent && !settings.MuteRightOutput {
 		color.Cyan("* NOTE: Right channel is completely silent.")
 	}
 	if statistics.Left.Clipped > 0 {
@@ -199,10 +208,19 @@ func printWavStatistics(statistics *WavStatistics) {
 			statistics.Right.Clipped, statistics.Right.FirstClipSample)
 	}
 
-	color.Yellow("- Left channel MinMax=<%f, %f>. Mean=%f",
-		statistics.Left.Min, statistics.Left.Max, statistics.Left.Mean)
-	color.Yellow("- Right channel MinMax=<%f, %f>. Mean=%f",
-		statistics.Right.Min, statistics.Right.Max, statistics.Right.Mean)
+	if settings.MuteLeftOutput {
+		color.Yellow("- Left channel was muted")
+	} else {
+		color.Yellow("- Left channel MinMax=<%f, %f>. Mean=%f",
+			statistics.Left.Min, statistics.Left.Max, statistics.Left.Mean)
+	}
+
+	if settings.MuteRightOutput {
+		color.Yellow("- Right channel was muted")
+	} else {
+		color.Yellow("- Right channel MinMax=<%f, %f>. Mean=%f",
+			statistics.Right.Min, statistics.Right.Max, statistics.Right.Mean)
+	}
 }
 
 func main() {
@@ -340,6 +358,13 @@ func main() {
 			outLeft = outLeft * settings.PostGain
 			outRight = outRight * settings.PostGain
 
+			if settings.MuteLeftOutput {
+				outLeft = 0.0
+			}
+			if settings.MuteRightOutput {
+				outRight = 0.0
+			}
+
 			updateWavStatistics(sampleNum, outLeft, outRight, &statistics)
 			outSamples = append(outSamples, [2]float64{outLeft, outRight})
 			sampleNum += 1
@@ -450,6 +475,7 @@ func main() {
 }
 
 func DebugPreFn(opCodes []base.Op, state *dsp.State, sampleNum int) int {
+	debugger.Init()
 	debugger.RegisterState(state)
 	debugger.UpdateScreen(opCodes, state, sampleNum)
 	return dsp.Ok

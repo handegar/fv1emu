@@ -67,15 +67,3 @@ const (
 // FIXME: Maybe we should open for increasing this for wild experiments?
 // (20260119 handegar)
 const MEMORY_SIZE = 32768
-
-type OpArg struct {
-	Len      int // Length of argument (in bits)
-	Type     int
-	RawValue int32
-}
-
-type Op struct {
-	Name     string
-	Args     []OpArg
-	RawValue int32
-}
