@@ -105,17 +105,12 @@ func ProcessSample(opCodes []base.Op, state *State, sampleNum int,
 /*
 Returns the LFO value, but 1/2 further into the cycle.
 NB: This is only valid for RAMP LFOs.
-
-// FIXME: This func needs to be re-checked to see if it is
-// correct. We should also get rid of the daft while/for loop by
-// using some bitmask'ing on integers instead.
-// (20220917 handegar)
 */
 func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 	utils.Assert(!isSinLFO(lfoType), "Cannot call GetLFOValuePlusHalfCycle() for SIN LFOs")
 
 	lfo := GetLFOValue(lfoType, state, false) + 0.5
-	for lfo > 1.0 {
+	if lfo > 1.0 {
 		lfo -= 1.0
 	}
 
@@ -126,9 +121,7 @@ func GetLFOValuePlusHalfCycle(lfoType int, state *State) float64 {
 /*
 Return a LFO value scaled with the amplitude value specified in the state
 
-		NOTE: The scaled value is an integer, ie *NOT* <0 .. 1.0>
-
-	  FIXME: Is the ramp LFO supposed to only go between 0 .. 0.5 or 0 .. 1.0?
+	NOTE: The scaled value is an integer, ie *NOT* <0 .. 1.0>
 */
 func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 	amp := 1.0
@@ -151,7 +144,7 @@ func ScaleLFOValue(value float64, lfoType int, state *State) float64 {
 
 /*
 Return the normalized LFO value
-ie. a value from  <-1.0 .. 1.0>
+ie. a value from  <-1.0 .. 1.0> for SIN/COS and <0 .. 1.0> for RAMP
 
 Set the 'storeValue' parameter to TRUE when the "REG" keyword is
 used for the "CHO RDA" instruction.
@@ -234,13 +227,16 @@ func GetLFOValue(lfoType int, state *State, storeValue bool) float64 {
 	return lfo
 }
 
-// Outputs a [0 .. 1.0] range.
+// Outputs a [0 .. 0.5] range.
 func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	utils.Assert(!isSinLFO(typ), "Cannot crossfade a SIN LFO")
 
+	// FIXME: I am unsure which shape the XFade LFO has in an actual FV-1. A
+	// pointy pyramid seems logical but the datasheet shows a flat-top pyramid. (20260202
+	// handegar)
+
 	val := 0.0
 	if true {
-
 		// Symetric saw-tooth with flat top. Each part is 1/3 of a cycle
 		if lfo < 1.0/3.0 {
 			val = lfo * 3.0
@@ -264,9 +260,7 @@ func GetXFadeFromLFO(lfo float64, typ int, state *State) float64 {
 	state.DebugFlags.XFadeMax = math.Max(state.DebugFlags.XFadeMax, val)
 	state.DebugFlags.XFadeMin = math.Min(state.DebugFlags.XFadeMin, val)
 
-	//fmt.Printf("%f => %f\n", lfo, val)
-
-	return val
+	return val / 2.0 // XFade is always <0 .. 0.5>
 }
 
 // Output normalized, <0 .. 1.0>
